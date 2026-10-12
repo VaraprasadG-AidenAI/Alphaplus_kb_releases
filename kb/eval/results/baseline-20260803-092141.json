@@ -1,0 +1,27 @@
+[
+ {
+  "ticket": "APD-1005",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "RPTMENU"
+  ],
+  "mentioned": [
+   "RPTMENU",
+   "UTL501",
+   "UTL501C"
+  ],
+  "hits": [
+   "RPTMENU"
+  ],
+  "recall": 1.0,
+  "fix_site": "RPTMENU",
+  "fix_site_hit": true,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 404.7379539012909,
+  "ok": true,
+  "error": "",
+  "output": "## APD-1005 \u2014 members involved\n\nOption 7 on the reports menu is wired correctly to a program that **exists** \u2014 this is *not* the missing-`INV380` case (that's option 11, and it's a deliberate planted defect per `docs/KNOWN-ISSUES.md` \u00a74, with a different symptom: a missing program throws a \"program not found\" message, not silence).\n\nThe option-7 call path:\n\n| Member | Path | Role | Evidence |\n|---|---|---|---|\n| `RPTMENU.MNUDDS` | `APPSRC/QMNUSRC/` | Display half \u2014 label \"7. Work file file build\" | `RPTMENU.MNUDDS:40` |\n| `RPTMENU.MNUCMD` | `APPSRC/QMNUSRC/` | Command half \u2014 option 7 = line 11 | `RPTMENU.MNUCMD:11` |\n| `UTL501C` | `APPSRC/QCLSRC/` | CL driver called by option 7 | `UTL501C.CLP:28` |\n| `UTL501` | `APPSRC/QCBLSRC/` | COBOL worker (\"Work file file build\") | `UTL501.CBL:20` |\n\n## The likely defect \u2014 a parameter-count mismatch\n\nThe menu passes **one** parameter; the driver now expects **five**.\n\n- `RPTMENU.MNUCMD:11` \u2192 `CALL PGM(APPOBJ/UTL501C) PARM('001')`\n- `UTL501C.CLP:28` \u2192 `PGM PARM(&COMPANY &DATEFR &DATETO &WAREHS &RTNCD)`\n\n`UTL501C` grew a date range, warehouse, and return-code parameter over the years (change history: SAR44402 \"external stored procedure\", SAR45184 \"run in unattended mode\" \u2014 `UTL501C.CLP:20,22`). The menu command was never updated. Passing 1 parm to a 5-parm program is legal at CALL time, but `UTL501C` references the unpassed `&DATEFR/&DATETO/&WAREHS/&RTNCD` at `UTL501C.CLP:136-137`, which fails; the global `MONMSG` at `UTL501C.CLP:56` routes it straight to the `ERROR`/`RETURN` path, so control drops back to the menu.\n\n**Confidence: inferred.** The members and the mismatch are exact from source; the precise reason the user sees *no* message can't be confirmed without running it (a replica cannot be compiled).\n\n## Where the change goes\n\nTwo options, depending on intended design:\n\n| Fix | Location | When |\n|---|---|---|\n| Pass the full parameter list option 7 now needs | `RPTMENU.MNUCMD:11` | If the menu should supply company + date range + warehouse |\n| Default the missing parameters when called with a short list | `UTL501C.CLP` (validation block, ~`:73-88`) | If option 7 is meant to be a simple interactive \"build for company 001\" |\n\nMost likely the fix belongs in **`RPTMENU.MNUCMD:11`** \u2014 the single line that drives option 7.\n"
+ }
+]

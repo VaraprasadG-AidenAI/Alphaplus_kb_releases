@@ -1,0 +1,1125 @@
+[
+ {
+  "ticket": "APD-1001",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "ORD400",
+   "ORDHDR",
+   "SYS100"
+  ],
+  "mentioned": [
+   "IVC400",
+   "ORD400",
+   "ORD400C",
+   "ORD400P",
+   "ORD415",
+   "ORDHDR",
+   "SYS100",
+   "Y2KDATE"
+  ],
+  "hits": [
+   "ORD400",
+   "ORDHDR",
+   "SYS100"
+  ],
+  "recall": 1.0,
+  "fix_site": "ORD400",
+  "fix_site_hit": true,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 227.20039534568787,
+  "ok": true,
+  "error": "",
+  "output": "Confirmed. Here's the answer.\n\n## APD-1001 \u2014 ORD400 order date a century out for company 002\n\n**Root cause (from code):** ORD400 prints the order date from the **6-digit** field `OHDORD6` (DDMMYY), which has no century and must be re-expanded through the `Y2KDATE` pivot-year window. Reports that read the **8-digit** `OHDODC` (CCYYMMDD) carry the century natively \u2014 which is why \"other reports show the same orders correctly.\"\n\n### Members involved\n\n| Member | Path | Role | Change? |\n|---|---|---|---|\n| **ORD400** | `APPSRC/QCBLSRC/ORD400.CBL` | The order backlog report. Formats the printed date from `OHDORD6` via `SYS100 C8T6` + windowing (e.g. lines 661\u2013663, 867\u2013869, 925\u2013927). | **Yes \u2014 fix here** |\n| ORD400P | `APPSRC/QDDSSRC/ORD400P.PRTF` | Printer file. Touch only if the date column width changes (6\u21928 digit). | Maybe |\n| ORDHDR | `APPSRC/QDDSSRC/ORDHDR.PF` | Order header file. Carries both `OHDORD6` (6-dig, line 118) and `OHDODC` (8-dig CCYYMMDD, line 125). | No |\n| SYS100 | `APPSRC/QCBLSRC/SYS100.CBL` | Shared date service (`C8T6`). ~1,900 callers; \"nobody will change it.\" | No |\n| Y2KDATE | `APPSRC/QCPYSRC/Y2KDATE.CPY` | Windowing constants (pivot year 40). Global \u2014 do not change for one report. | No |\n| ORD400C | `APPSRC/QCLSRC/ORD400C.CLP` | CL that calls ORD400. | No |\n\n### Where the change goes\n\n**`ORD400.CBL`** \u2014 source the printed order date from the century-bearing `OHDODC` (8-digit CCYYMMDD) instead of round-tripping `OHDORD6` through `SYS100`/`Y2KDATE`. That is the report-local fix, and it matches the ticket evidence: `OHDODC` is already correct in the data (other reports prove it).\n\n### One flag (Rule 2)\n\nA comment in `ORDHDR.PF` (lines 447\u2013449) names a **different** root cause: *\"ORD415 and IVC400 update only the six-digit versions \u2026 the root cause of the recurring 'order date wrong on the backlog report' incidents.\"* That is a comment, not code \u2014 and the ticket evidence contradicts it (reports reading `OHDODC` are correct, so `OHDODC` is *not* stale). Treat `ORD415.SQLCBLLE` / `IVC400.SQLCBLLE` as a **lead to verify**, not the fix. If it turns out `OHDODC` *is* out of step for company 002, the fix moves to those maintenance programs instead. Worth confirming with the client which field is authoritative before changing code.\n\nWant me to trace exactly which paragraph builds ORD400's printed date line, so the edit target is a specific line range?\n"
+ },
+ {
+  "ticket": "APD-1002",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "CUSMAS",
+   "CUSREC"
+  ],
+  "mentioned": [
+   "CUS100",
+   "CUS100D",
+   "CUSMAS",
+   "CUSREC",
+   "CUSX21",
+   "CUSX21L5"
+  ],
+  "hits": [
+   "CUSMAS",
+   "CUSREC"
+  ],
+  "recall": 1.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 360.59124660491943,
+  "ok": true,
+  "error": "",
+  "output": "## APD-1002 \u2014 where the change goes\n\n**The customer enquiry screen is CUS100.** Its display file's own header says so: `QDDSSRC/CUS100D.DSPF` line 7 *\"Green screen for CUS100 - Customer enquiry\"*, line 104 renders the title `'CUSTOMER ENQUIRY'`. `CUSCRA` is **not** on it today.\n\n### Change sites (edit these)\n\n| Member | Why | Evidence |\n|---|---|---|\n| `QDDSSRC/CUS100D.DSPF` | Add `CUSCRA` (Agency Score) as an output field on the `HEADER` record format | no `CUSCRA` in the file today |\n| `QCBLLESRC/CUS100.CBLLE` | Move the score into the new screen field before `WRITE ... FORMAT IS 'HEADER'` | write at line 371; header fields set at 423+ |\n\n### Field source (already defined \u2014 read-only for this ticket)\n\n| Member | Status |\n|---|---|\n| `QDDSSRC/CUSMAS.PF` | `CUSCRA 3S` already exists (line 183, added by SAR21330) |\n| `QCPYSRC/CUSREC.CPY` | `CUR-CUSCRA PIC S9(03)` already exists (line 138) |\n\nThe field is already in the master file and copybook, so those don't need altering to hold the value.\n\n### One caveat you must check before coding\n\nCUS100 does **not** read `CUSMAS` directly and does **not** copy `CUSREC`. It reads `CUSX21L5` \u2014 a logical over the **extract** file `CUSX21` (`QDDSSRC/CUSX21L5.LF` line 27, `PFILE(CUSX21)`), and the enquiry fields come off a record it calls `DETAIL`. So confirm `CUSCRA` is actually carried through the `CUSX21` extract and its build. If it isn't:\n\n- `QDDSSRC/CUSX21.*` (the extract PF) and whatever CL/program populates it also need `CUSCRA` added, or CUS100 needs a fresh read of `CUSMAS`/`CUSREC` to pick the score up.\n\n(Note: the `FORMAT IS 'HEADER'` vs. `DETAIL`-record mismatch in CUS100 is one of the 14 deliberate defects in `docs/KNOWN-ISSUES.md`, not something to fix here.)\n\n**Short answer:** `CUS100D.DSPF` + `CUS100.CBLLE` is where the change goes; `CUSMAS.PF` and `CUSREC.CPY` already hold `CUSCRA`; verify the `CUSX21` extract path carries it.\n"
+ },
+ {
+  "ticket": "APD-1003",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "ORD100",
+   "ORDHDR",
+   "ALO100"
+  ],
+  "mentioned": [
+   "ITMWHS",
+   "ORD100",
+   "ORD100C",
+   "ORD100D",
+   "ORD400",
+   "ORD400C",
+   "ORD900",
+   "ORD950",
+   "ORDALO",
+   "ORDDTL",
+   "ORDHDR"
+  ],
+  "hits": [
+   "ORD100",
+   "ORDHDR"
+  ],
+  "recall": 0.6666666666666666,
+  "fix_site": "ORD100",
+  "fix_site_hit": true,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 305.3034107685089,
+  "ok": true,
+  "error": "",
+  "output": "## APD-1003 \u2014 ORD100 record lock on ORDHDR at ~02:00\n\n**Short version:** ORD100 is the victim, not the cause. It opens `ORDHDR` for update under commitment control and has **no lock-retry logic**, so any record lock held by an overnight batch job surfaces as a hard failure \u2014 which is why a manual retry clears it. The change goes in ORD100 (and optionally its CL driver). The batch job actually holding the lock at 02:00 cannot be named from source \u2014 that's a scheduler fact.\n\n### Members involved\n\n| Member | Type | Role | Evidence |\n|---|---|---|---|\n| `ORD100.CBLLE` | ILE COBOL | Interactive order entry. Opens `ORDHDR ORDDTL ORDALO ITMWHS` **I-O**, commits per transaction. Declares `88 ORDHDR-LOCKED VALUE '9D'` but **never references it** in the procedure division \u2014 no wait/retry. | `ORD100.CBLLE:550` (OPEN I-O), `:230` (lock 88), `:1816-1820` (COMMIT/ROLLBACK) |\n| `ORD100C.CLLE` | CL | Driver. `OVRDBF FILE(ORDHDR) \u2026 SHARE(*YES)`, no `WAITRCD` override. | `ORD100C.CLLE:122` |\n| `ORDHDR.PF` | DDS PF | The locked file. | \u2014 |\n| `ORD100D.DSPF` | DDS DSPF | Order-entry screen (context only). | \u2014 |\n\n### The overnight lock holder \u2014 unresolved\n\nThe joblog shows the lock; the *program* that holds it is whatever runs at 02:00, and **that is a job-scheduler entry, which is a permanent blind spot** \u2014 not derivable from this source tree. Candidates that touch `ORDHDR` in batch:\n\n| Member | ORDHDR access | Note |\n|---|---|---|\n| `ORD400.CBL` (+`ORD400C.CLP`) | input (`I`) | Order backlog report; most likely overnight report reader. |\n| `ORD950.CBL` | via history file | Order line selection build. |\n| `ORD900.CBL` | update (`U`) | **Dead** \u2014 one-off 1996 conversion, \"nothing calls it.\" Rule it out. |\n\nConfirming which of these (or another job) fires at 02:00 needs the scheduler / job-queue config, not the code.\n\n### Where the change goes\n\n- **Interactive fix (recommended, self-contained): `ORD100.CBLLE`** \u2014 implement the already-declared `ORDHDR-LOCKED ('9D')` path: on a `9D` file-status, wait briefly and retry N times before surfacing the error, instead of failing straight to the user.\n- **Optional, same effect cheaper: `ORD100C.CLLE`** \u2014 add `WAITRCD(nn)` to the `OVRDBF FILE(ORDHDR)` so the read waits for the lock rather than erroring immediately.\n- **Root-cause fix (if the batch job is the real problem): the 02:00 batch member** once identified \u2014 shorten its lock hold (tighter commit cycle / read without update lock). Cannot be pinned to a member from source alone.\n\nWant me to draft the `9D` retry block for ORD100, or trace ORD400/ORD950 to see how long each holds ORDHDR?\n"
+ },
+ {
+  "ticket": "APD-1004",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "CUSMAS",
+   "CUSREC",
+   "CUSREC2",
+   "CUSRECN"
+  ],
+  "mentioned": [
+   "CSA307P",
+   "CSA410",
+   "CSA502",
+   "CSC104",
+   "CSC1042",
+   "CSC104D",
+   "CSC104S",
+   "CSC104W",
+   "CSC310",
+   "CSC310P",
+   "CSC313P",
+   "CSC402",
+   "CSY1052",
+   "CSY105D",
+   "CSY105S",
+   "CSY105W",
+   "CSY108D",
+   "CSY301",
+   "CSY301P",
+   "CSY304",
+   "CSY304P",
+   "CSY312P",
+   "CSY315",
+   "CSY315P",
+   "CSY402",
+   "CUS2002",
+   "CUS200D",
+   "CUS200S",
+   "CUS200W",
+   "CUS210D",
+   "CUS301P",
+   "CUS306P",
+   "CUS856",
+   "CUS950",
+   "CUSMAS",
+   "CUSREC",
+   "CUSRJ44",
+   "CUSW26",
+   "CUSW26C",
+   "CUSX21",
+   "CUSX21L4",
+   "ORDCUSJ1"
+  ],
+  "hits": [
+   "CUSMAS",
+   "CUSREC"
+  ],
+  "recall": 0.5,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": true,
+  "false_confidence": false,
+  "seconds": 193.5448443889618,
+  "ok": true,
+  "error": "",
+  "output": "## APD-1004 \u2014 Widen CUSNAM 30 \u2192 40: blast radius\n\n`CUSNAM` is stored in **four separate physical files**, not one. That is the core of the problem \u2014 there is no single field to change.\n\n### Where the change physically goes (edit these)\n\n**Physical files \u2014 change `CUSNAM 30A` \u2192 `40A`:**\n| Member | Note |\n|---|---|\n| `CUSMAS.PF` | Customer master |\n| `CUSX21.PF` | Independent PF, also carries CUSNAM |\n| `CUSW26.PF` | Independent PF, also carries CUSNAM |\n| `CUSRJ44.PF` | Independent PF, also carries CUSNAM |\n\n**Copybooks \u2014 change `PIC X(30)` \u2192 `X(40)`:**\n| Member |\n|---|\n| `CUSREC.CPY` (`CUR-CUSNAM`) |\n| `CUSW26C.CPY` (`CUR-CUSNAM`) |\n\n**Programs with a hardcoded `WS-CUSNAM PIC X(30)` \u2014 must be edited by hand (REFFLD does not reach working-storage):**\n`CSA410.CBL`, `CSA502.CBLLE`, `CSC310.CBL`, `CSC104.SQLCBLLE`, `CSC402.CBL`, `CSY301.CBL`, `CSY304.CBL`, `CSY315.CBL`, `CSY402.CBL`, `CUS856.CBL`, `CUS950.CBL`\n\n### Rebuilds automatically, but needs a look\n\n**Logical files \u2014 access path rebuilds:**\n| Member | Why it matters |\n|---|---|\n| `CUSX21L4.LF` | **Keys on CUSNAM** \u2014 widening changes a key field; key length and any callers sorting/positioning on it are affected |\n| `ORDCUSJ1.LF` | Join logical referencing CUSNAM via JREF |\n\n**Screens (DSPF) \u2014 pull width via `REFFLD`, so they recompile to 40 automatically, but the extra 10 chars will not fit at their fixed positions:**\n`CUS200D`, `CUS2002`, `CUS200S`, `CUS200W`, `CUS210D` (input, col 35), `CSC104D`, `CSC1042`, `CSC104S`, `CSC104W`, `CSY105D`, `CSY1052`, `CSY105S`, `CSY105W`, `CSY108D` (output, col 24)\n\n**Reports (PRTF) \u2014 same REFFLD story, column layout at col 15 will need re-spacing:**\n`CSC313P`, `CUS301P` (from CUSMAS), `CSA307P` (CUSW26), `CSC310P`, `CSY301P`, `CSY312P`, `CSY315P` (CUSX21), `CSY304P`, `CUS306P` (CUSRJ44)\n\n### Wider recompile population\n~250+ COBOL members reference `CUSNAM` through record-level `COPY`/SQL host structures. They recompile clean off the new copybooks/PFs **if** they don't also carry their own `X(30)` scratch fields \u2014 the 11 listed above are the ones that provably do. I hit the search cap at 250 files, so treat the record-level list as \"recompile and test,\" not fully enumerated.\n\n### What I can't see (say-what-you-don't-know)\n- **Job scheduler / trigger attachments** on these files \u2014 permanent blind spot; not in source.\n- Whether the four PFs are meant to hold the *same* customer name (data duplication) or are legitimately distinct \u2014 the KB can't tell you which is authoritative; that's a client question.\n- The physical `.PF`/copybook analysis is grep-derived because the **alphaplus MCP tools (`impact_of_change`, `where_is_field_used`) weren't permitted in this session** \u2014 they'd give a cleaner, transitive recompile closure. Worth re-running interactively before you commit to a number.\n\n**Bottom line for Sales:** this is not a one-field change. It touches 4 physical files, 2 copybooks, ~11 programs by hand, 2 logicals (one keyed), and every customer screen and report needs re-layout \u2014 plus a full recompile-and-test of the ~250-member customer subsystem.\n"
+ },
+ {
+  "ticket": "APD-1005",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "RPTMENU"
+  ],
+  "mentioned": [
+   "APMAIN",
+   "RPTMENU",
+   "UTL501",
+   "UTL501C"
+  ],
+  "hits": [
+   "RPTMENU"
+  ],
+  "recall": 1.0,
+  "fix_site": "RPTMENU",
+  "fix_site_hit": true,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 271.9660074710846,
+  "ok": true,
+  "error": "",
+  "output": "I have the full trace. Here's the answer.\n\n## Members involved (option 7 \u2192 \"Work file file build\")\n\n| # | Member | Path | Role |\n|---|---|---|---|\n| 1 | `RPTMENU.MNUDDS` | `APPSRC/QMNUSRC/` | Display half \u2014 line 40 renders ` 7. Work file file build` |\n| 2 | `RPTMENU.MNUCMD` | `APPSRC/QMNUSRC/` | Command half \u2014 **line 11** (the 7th command) is what option 7 runs: `CALL PGM(APPOBJ/UTL501C) PARM('001')` |\n| 3 | `UTL501C` | `APPSRC/QCLSRC/UTL501C.CLP` | CL driver \u2014 validates, overrides files, calls `UTL501`, then re-submits to `QBATCH` |\n| 4 | `UTL501` | `APPSRC/QCBLSRC/UTL501.CBL` | COBOL program that does the actual build |\n\n**Mapping is confirmed**, not guessed: the command file has no line/option renumbering (comment lines don't count; the 12th and 13th commands `GO APMAIN` / `SIGNOFF` line up exactly with options 12/13). It's independently anchored by `docs/KNOWN-ISSUES.md` #4, which states option **11** calls `INV380` \u2014 that's the 11th command line, so the 7th is `UTL501C`. This also means APD-1005 is **not** one of the 14 planted defects.\n\n## Where the change goes\n\nThe symptom \u2014 \"runs, returns to the menu, no message\" \u2014 is decided in **`UTL501C.CLP`**, and the fix most likely lands there or in the `RPTMENU.MNUCMD` line:\n\n- **`UTL501C.CLP`** \u2014 its global `MONMSG ... GOTO ERROR` (line 56) catches any failure and the `ERROR:` handler (line 168) re-sends it as `MSGTYPE(*ESCAPE)`. A `CRTMNU TYPE(*DSPF)` menu **discards** an escape from an option command rather than displaying it \u2192 exactly \"back to the menu, no message.\" Two triggers live here: the menu passes only 1 of the 5 declared parameters (`PARM('001')`, so `&DATEFR/&DATETO/&WAREHS/&RTNCD` are unset), and line 145 `SBMJOB`s the real work to `QBATCH`, so nothing visible happens interactively regardless.\n- **`RPTMENU.MNUCMD` line 11** \u2014 if option 7 is meant to prompt the user or pass the date/warehouse range, the call itself is wrong (it hands over only the company).\n\n## What I can't confirm\n\nI can't run it \u2014 the replica is deliberately non-compilable (per `CLAUDE.md`). So I can't prove *which* of the two mechanisms fires first. `UTL501.CBL` also has a paragraph-name mismatch (`PERFORM 1000-INITIALISE` at line 187 vs the paragraph `1000-INITIALIZE` at line 196), but that's a compile-time issue, likely replica noise rather than the runtime cause.\n\nStart in **`UTL501C.CLP`** (error handling + the single-parameter call); the build logic itself is in **`UTL501.CBL`**.\n"
+ },
+ {
+  "ticket": "APD-1006",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "ORD100",
+   "ORD100D"
+  ],
+  "mentioned": [
+   "ORD100",
+   "ORD100C",
+   "ORD100D"
+  ],
+  "hits": [
+   "ORD100",
+   "ORD100D"
+  ],
+  "recall": 1.0,
+  "fix_site": "ORD100",
+  "fix_site_hit": true,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 79.33124589920044,
+  "ok": true,
+  "error": "",
+  "output": "## APD-1006 \u2014 ORD100 format-not-found on entry\n\n**Root cause:** ORD100 writes/reads a record format named `DETAIL` that the display file does not define. At runtime the display file manager returns a format-not-found error the moment order entry tries its first screen I/O. This is the planted class of defect noted in `CLAUDE.md` / KNOWN-ISSUES (program names a format the DSPF lacks).\n\n### Members involved\n\n| Member | Role | Evidence |\n|---|---|---|\n| `ORD100.CBLLE` | Failing program \u2014 names format `'DETAIL'` | `ORD100.CBLLE:665` `WRITE ORD100D-RECORD FORMAT IS 'DETAIL'`, `:666` `READ ORD100D FORMAT IS 'DETAIL'`, plus every `OHD* OF DETAIL` MOVE |\n| `ORD100D.DSPF` | Display file \u2014 has **no** `DETAIL` format | Formats defined: `SFLRCD`, `SFLCTL`, `HEADER`, `CONFIRM`, `SEARCH`, `SFLMSG`, `MSGCTL`, `FOOTER` (`ORD100D.DSPF:58,75,106,120,127,140,145,158`) |\n| `ORD100C.CLLE` | CL driver that calls the program | context / launch path |\n\n### Where the change goes\n\nTwo members, one is the fix \u2014 pick per intent:\n\n- **`ORD100.CBLLE`** \u2014 change `FORMAT IS 'DETAIL'` (lines 664\u2013666) and the `OHD* OF DETAIL` qualifiers to a format the DSPF actually defines. The header fields (`OHDADR` etc.) are declared under `SFLRCD` in the DSPF (`ORD100D.DSPF:68`), so the intended target is likely `SFLRCD`/`SFLCTL`, not a standalone `DETAIL`.\n- **`ORD100D.DSPF`** \u2014 alternatively, add an `R DETAIL` record format carrying the `OHD*` fields, if the program's naming is what was intended.\n\nThe program-side fix in **`ORD100.CBLLE`** is the smaller, lower-blast-radius change and is the more likely correct one, since the fields it moves already exist on `SFLRCD` in the display file.\n\nOne check before coding: confirm which format the `OHD*` fields are meant to live on by reading the `HEADER`/`SFLRCD` field lists in `ORD100D.DSPF` \u2014 that decides whether you retarget the COBOL to `SFLRCD` or genuinely need a new `DETAIL` format in the DSPF.\n"
+ },
+ {
+  "ticket": "APD-1007",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "CUSMAS",
+   "CUS200"
+  ],
+  "mentioned": [
+   "CUSMAS"
+  ],
+  "hits": [
+   "CUSMAS"
+  ],
+  "recall": 0.5,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 53.00610423088074,
+  "ok": true,
+  "error": "",
+  "output": "I need permission to use the alphaplus knowledge-base tools (`who_touches_file`, `describe_file`, etc.) to answer this properly. These are read-only queries. Please approve them and I'll run the analysis.\n\nHere's exactly what I'll do once approved:\n\n1. **`who_touches_file CUSMAS mode=write`** \u2014 the direct list of programs that write to CUSMAS, including ones that reach it through a logical file (which plain text search misses).\n2. **`describe_file CUSMAS`** \u2014 its logicals, keys, and read/write program lists as a cross-check.\n3. **`resolve_overrides`** on candidates \u2014 on IBM i a COBOL program names one file but an `OVRDBF` in the CL driver can redirect it, so I'll confirm each program actually resolves to the physical CUSMAS.\n4. **`impact_of_change CUSMAS`** \u2014 to tell you where a maintenance change would land and what recompiles.\n\nGrant access to the alphaplus tools and I'll return the member names.\n"
+ },
+ {
+  "ticket": "APD-1008",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "ORD100",
+   "ORD100C",
+   "ORDHDR"
+  ],
+  "mentioned": [
+   "ARCHIVE",
+   "AUDTRL",
+   "CTLFIL",
+   "CUSADR",
+   "CUSCRD",
+   "CUSMAS",
+   "ITMMAS",
+   "ITMWHS",
+   "NUMCTL",
+   "ORD100",
+   "ORD100C",
+   "ORD100D",
+   "ORDALO",
+   "ORDBOR",
+   "ORDDTL",
+   "ORDHDR",
+   "PRCLST"
+  ],
+  "hits": [
+   "ORD100",
+   "ORD100C",
+   "ORDHDR"
+  ],
+  "recall": 1.0,
+  "fix_site": "ORD100C",
+  "fix_site_hit": true,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 85.87140464782715,
+  "ok": true,
+  "error": "",
+  "output": "Got everything I need \u2014 the COBOL and its CL driver together give the full answer.\n\n## What ORD100 actually opens, and how\n\nORD100 is a COBOL program that names files but never decides which physical files they are. That decision is made by the CL driver **`ORD100C`** via `OVRDBF`, and the target library is a **runtime value**, not a compile-time one.\n\n**The chain:**\n1. COBOL `ORD100.CBLLE` declares 14 files with `ASSIGN TO DATABASE-xxx` (lines 58\u2013149) and opens them at lines 548\u2013552.\n2. `ORD100C.CLLE` sets `&DTALIB` to `APPDTA` (line 48), then **overwrites it from data area `APPCTL` positions 1\u201310** (`RTVDTAARA`, line 54).\n3. It issues `OVRDBF FILE(x) TOFILE(&DTALIB/x)` for 10 files (lines 122\u2013131), then calls ORD100.\n\nSo each overridden file resolves to **`<APPCTL[1-10]>/filename`**, defaulting to `APPDTA/filename`. The COBOL file name never changes \u2014 the CL even says so (lines 118\u2013120).\n\n**Files ORD100 opens:**\n\n| Open mode | Files | Redirected by OVRDBF in ORD100C? |\n|---|---|---|\n| I-O | ORDHDR, ORDDTL, ORDALO, ITMWHS, AUDTRL | \u2705 yes \u2192 `&DTALIB` |\n| INPUT | CUSMAS, CUSCRD, CUSADR, ITMMAS, PRCLST | \u2705 yes \u2192 `&DTALIB` |\n| INPUT | **CTLFIL, NUMCTL, ORDBOR** | \u274c **no override** \u2014 resolve by job library list |\n| workstation | ORD100D (display file) | n/a |\n\nThe primary order-entry file is **ORDHDR** (order header, I-O), resolving to `APPDTA/ORDHDR` by default.\n\n## For your archive-library test\n\n**Members involved:** `ORD100.CBLLE`, `ORD100C.CLLE`, `ORD100D.DSPF`.\n\n**Where the change goes: `ORD100C.CLLE` \u2014 not the COBOL.** Two ways:\n\n- **No source change (preferred):** set data area `APPCTL` (positions 1\u201310) to your archive library. Line 54 picks it up, so the same ORD100 object runs against archive data with no recompile. The code comment (lines 51\u201353) says this is the intended mechanism.\n- **Source change:** edit the `OVRDBF ... TOFILE(&DTALIB/...)` lines (122\u2013131) in ORD100C to point at the archive library.\n\n**Two things that will bite the test:**\n\n1. **CTLFIL, NUMCTL, ORDBOR have no OVRDBF.** Changing `&DTALIB` (either method) will **not** redirect them \u2014 they still open from the job's library list. NUMCTL is order-number control and ORDBOR is back-order; if archive needs its own copies, add overrides for them or fix the library list.\n2. The header comment in ORD100C (lines 6\u20138) lists only 8 files; the code actually overrides 10 (adds ITMMAS, PRCLST). Trust the code, not the header.\n"
+ },
+ {
+  "ticket": "APD-1009",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "SYS100"
+  ],
+  "mentioned": [
+   "CALFIL",
+   "CSA400",
+   "CSC400",
+   "CUS400",
+   "DATPARM",
+   "SYS100",
+   "SYS100D"
+  ],
+  "hits": [
+   "SYS100"
+  ],
+  "recall": 1.0,
+  "fix_site": "SYS100",
+  "fix_site_hit": true,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 184.8154320716858,
+  "ok": true,
+  "error": "",
+  "output": "## APD-1009 \u2014 where the change lands\n\n**The change goes in two members. Everything else is read-only context or blast radius.**\n\n| Member | Path | Role in the change |\n|---|---|---|\n| **SYS100** | `APPSRC/QCBLSRC/SYS100.CBL` | The service module itself. Add the new function-code branch here. The data already exists \u2014 SYS100 reads `CALFIL` and already loads `CALWKN` (week number) into `WS-WEEK-NUMBER`. |\n| **DATPARM** | `APPSRC/QCPYSRC/DATPARM.CPY` | The shared linkage copybook that defines `DAT-FUNCTION` and its codes (`C6T8 C8T6 VALD ADDD DIFF DOW`). Register the new code here. |\n\n**Read-only, no change needed:**\n\n| Member | Why it matters |\n|---|---|\n| **CALFIL** | Calendar file. Already carries the week number (`CALWKN`). It's the data source \u2014 you don't compute anything new, you expose what's already there. |\n| **SYS100D** (`APPSRC/QDDSSRC/SYS100D.DSPF`) | SYS100's display file. Only relevant to the interactive path, **not** to a function-code call. Leave it alone. |\n\n## How widely SYS100 is called\n\n**~1,900 members.** SYS100 is the most-called program in the application. Every caller uses the same fixed contract:\n\n```cobol\nCALL 'SYS100' USING DAT-PARAMETERS\n```\n\nConfirmed across `AGD1xx`, `AGD2xx`, `CSC400`, `CSA400`, `CUS400`, and hundreds more. (Count is from the SYS100 header note + grep; confidence *inferred* \u2014 the alphaplus `who_calls` tool would give an exact figure but its permission wasn't granted this session.)\n\n## The one decision that controls the blast radius\n\n**Return the week number in an existing output field** (`DAT-DAYS` `S9(05)` or `DAT-DATE-OUT-6` are unused for a week-number call). Then:\n\n- New function code is **backward-compatible** \u2014 the ~1,900 existing callers don't change and don't recompile. Only Finance's new caller uses it.\n\n**Do NOT add a new field to `DATPARM`** unless forced. Its own header warns: caller and callee compiled against different copybook versions **silently misalign into corrupt data, with no error**. A layout change forces recompiling all ~1,900 callers together.\n\nOne caveat on the replica: SYS100's `2000-PERFORM-FUNCTION` doesn't actually branch on `DAT-FUNCTION` \u2014 it validates screen fields instead. That's the known \"plausible-shaped, not coherent\" logic (per CLAUDE.md), not a fact about the real system. In the real SYS100 you'd be adding a `WHEN 'WKNO'` arm to the function dispatch.\n"
+ },
+ {
+  "ticket": "APD-1010",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "PRCSRV"
+  ],
+  "mentioned": [
+   "PRCCALC",
+   "PRCPARM",
+   "PRCSRV"
+  ],
+  "hits": [
+   "PRCSRV"
+  ],
+  "recall": 1.0,
+  "fix_site": "PRCSRV",
+  "fix_site_hit": true,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 203.1565330028534,
+  "ok": true,
+  "error": "",
+  "output": "## Answer\n\nAdding a procedure to `PRCSRV` changes its signature. The binder source already documents the safe procedure in its own header (lines 6\u201314) \u2014 follow it exactly.\n\n### The safe way (from the .BND's own rules)\n\nExport order is **positional**. A bound caller resolves each import by its slot number, not its name, so inserting or reordering a symbol silently repoints existing callers at the wrong procedure (the file records a 2014 near-miss that would have done exactly this, lines 68\u201375).\n\nSteps:\n\n| # | Action | Why |\n|---|---|---|\n| 1 | Copy the current `*CURRENT` block down as a new `*PRV` block, keeping `SIGNATURE('PRCSRV_V3')` | Programs already bound to V3 keep running without a rebind |\n| 2 | Bump the `*CURRENT` block signature to `'PRCSRV_V4'` | Signature changed \u2192 new level |\n| 3 | Append the new `EXPORT SYMBOL(...)` at the **END** of the `*CURRENT` block (after `PRC_GetMargin`) | Never insert into, reorder, or remove from any block |\n| 4 | Rebind via `CRTSRVPGM` | Already `EXPORT(*SRCFILE)` \u2014 no build change needed |\n\nNever touch the existing V1/V2/V3 `*PRV` blocks.\n\n### Members involved\n\n| Member | Role | Change |\n|---|---|---|\n| `APPSRC/QSRVSRC/PRCSRV.BND` | Binder source (export list) | Steps 1\u20133 above \u2014 the new export goes at the end of the `*CURRENT` block |\n| *(implementation module)* | The COBOL module bound into `PRCSRV` | Write the new procedure body here |\n| `APPSRC/QCPYSRC/PRCPARM.CPY` | Shared linkage block, copied by **both** caller and callee | Only if the new promotion type needs new fields \u2014 add them at the **end**, then recompile caller and callee together (mismatched copies misalign silently, per its own note, lines 10\u201313) |\n| `BUILD/CRTAPPALL.CLP:461` | `CRTSRVPGM SRVPGM(PRCSRV) EXPORT(*SRCFILE)` | No edit \u2014 reads the .BND automatically |\n\n### One thing I can't confirm (Rule 2)\n\n**Which module actually implements the exports is unresolved.** \n- `PRCCALC.CBLLE`'s header comment says *\"Bound into PRCSRV\"* \u2014 but that's a comment, not a fact, and it's a plain `PROGRAM-ID PRCCALC`, not a module defining `PRC_GetPrice` etc.\n- `CRTSRVPGM` at line 461 specifies no `MODULE()`, so it defaults to `MODULE(*SRVPGM)` \u2014 a module named `PRCSRV` \u2014 but **no `PRCSRV` module source exists** in `QCBLLESRC`.\n\nSo the export list (`PRCSRV.BND`) and the implementation source are out of sync in this tree. Before writing the procedure body, confirm on the real system which module `PRCSRV` binds \u2014 `WRKSRVPGM PRCSRV` / `DSPSRVPGM ... DETAIL(*MODULE)`. `PRCCALC` is the likely candidate but not proven from code.\n"
+ },
+ {
+  "ticket": "APD-1011",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "ALO100",
+   "ORDALO",
+   "ITMWHS"
+  ],
+  "mentioned": [
+   "ALO100",
+   "ALO100C",
+   "ITMWHS",
+   "ORD100",
+   "ORDALO"
+  ],
+  "hits": [
+   "ALO100",
+   "ORDALO",
+   "ITMWHS"
+  ],
+  "recall": 1.0,
+  "fix_site": "ALO100",
+  "fix_site_hit": true,
+  "declined": true,
+  "false_confidence": false,
+  "seconds": 154.62127447128296,
+  "ok": true,
+  "error": "",
+  "output": "## Answer\n\nThe fix is one program. Two others are in the blast radius.\n\n| Member | Type / path | Role |\n|---|---|---|\n| **ALO100** | `APPSRC/QCBLLESRC/ALO100.CBLLE` | **Where the change goes.** The allocation engine. |\n| **ALO100C** | `APPSRC/QCLSRC/ALO100C.CLLE` | The overnight driver. Owns the commit environment. |\n| **ORD100** | `APPSRC/QCBLLESRC/ORD100.CBLLE` | Interactive caller of ALO100 \u2014 any change hits this path too. |\n| ORDALO / ITMWHS | DDS files | The two files that drift apart: allocation vs. reserved stock. |\n\n## Why, and where in ALO100\n\nThe two facts that must move together don't:\n\n- **ORDALO** (the allocation row) *is* rewritten \u2014 `4000-UPDATE-RECORD`, `REWRITE ORDALO-RECORD` at **ALO100:482**. This is what makes the line \"show as allocated.\"\n- **ITMWHS** (warehouse stock \u2014 `IWHQAL`, quantity allocated) is opened `I-O` and only ever **read** \u2014 `5450-GET-ITMWHS` at **ALO100:1245**. There is no `REWRITE ITMWHS-RECORD` anywhere in the member (a single REWRITE exists, and it's ORDALO's). So the reservation is never written back.\n\nThat alone produces the ticket: allocated on ORDALO, never reserved on ITMWHS \u2014 no failure required.\n\nThe failure-partway symptom then rides on top of the commit boundary:\n\n- `8500-TAKE-COMMIT` \u2014 **ALO100:489** \u2014 commits every 500 records.\n- `9800-FATAL-ERROR` \u2014 **ALO100:2561** \u2014 `ROLLBACK`, which only reverses work since the last commit. Already-committed groups survive.\n\nSo even after the ITMWHS rewrite is added, the ORDALO rewrite and the ITMWHS rewrite for one order line must sit inside the *same* unit of work, or a mid-run failure re-opens the same gap for committed groups.\n\n**The change:** in `4000-UPDATE-RECORD`, add the ITMWHS reservation update (`REWRITE ITMWHS-RECORD` updating `IWHQAL`) alongside the ORDALO rewrite, both inside the same commit cycle governed by `8500-TAKE-COMMIT` / `9800-FATAL-ERROR`.\n\n## Two things to verify first (Rule 2)\n\n1. **Commitment control may not be active.** `ALO100C.CLLE` issues no `STRCMTCTL`. If none is started at the job/subsystem level, the `COMMIT`/`ROLLBACK` verbs in ALO100 protect nothing and every rewrite is already independent. Whether the overnight job runs under commitment control is **outside the source** (job scheduler / subsystem setup \u2014 a known blind spot). Confirm before assuming the commit logic works at all.\n2. **ORD100 shares `4000-UPDATE-RECORD`.** The interactive path uses the same paragraph; the header claims caller-dependent locking behaviour. Don't change the update logic without checking the interactive path still behaves.\n\nThis is a real gap \u2014 I checked `docs/KNOWN-ISSUES.md`; it is not one of the 14 planted defects.\n"
+ },
+ {
+  "ticket": "APD-1012",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "FIN400",
+   "GLINTF"
+  ],
+  "mentioned": [
+   "EODMAIN",
+   "FIN400",
+   "FIN400C",
+   "IVCHDR"
+  ],
+  "hits": [
+   "FIN400"
+  ],
+  "recall": 0.5,
+  "fix_site": "FIN400",
+  "fix_site_hit": true,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 155.3958969116211,
+  "ok": true,
+  "error": "",
+  "output": "## APD-1012 \u2014 FIN400 double-posts on restart\n\n**Root cause (from code, not comments):** FIN400 commits every 500 records but has **no idempotency guard and no working checkpoint**. On a mid-run failure the already-committed groups stay applied; EODMAIN restarts step 100 from the top, FIN400 re-reads IVCHDR from record 1 and re-posts them.\n\nTwo things the header promises but the code does not do:\n- Header says *\"restartable from a checkpoint held in a data area\"* and lists `DTAARA: GLBATCH` \u2014 **`GLBATCH` never appears in the procedure division.** No checkpoint is read or written.\n- `IVHPST` (\"Posted to ledger\") exists on IVCHDR and FIN400 has a `CHECK-IVHPST` paragraph \u2014 but it only *validates* the flag. It never skips records already flagged `Y`, and never sets `Y` after posting.\n\n### Members involved\n\n| Member | Type | Role in this bug |\n|---|---|---|\n| **FIN400.SQLCBLLE** | SQLCBLLE | The posting program. **Where the fix goes.** No skip-if-posted, no checkpoint, commits mid-run. |\n| **FIN400C.CLLE** | CLLE | Driver \u2014 sets overrides (SHARE(*YES)) and calls FIN400. Commitment-control scope lives around this call. |\n| **EODMAIN.CLLE** | CLLE | EOD orchestrator. Step 100 = FIN400C. Restart is by step number only; **no data restore** \u2014 its own header admits partly-run steps \"do not cope.\" |\n| **IVCHDR.PF** | PF | Carries `IVHPST` (`IVHPST`, 1A) \u2014 the natural idempotency flag, currently unused for that purpose. |\n\n### Where the change goes\n\nPrimary: **FIN400.SQLCBLLE**. Two viable fixes, both in this member:\n\n1. **Skip-and-mark (simplest, uses existing field):** in `READ-NEXT`/`PROCESS-RECORD`, skip IVCHDR records where `IVHPST = 'Y'`; set `IVHPST = 'Y'` (and REWRITE) inside the same commit as the GL post. Restart then skips what committed.\n2. **Real checkpoint:** implement the `GLBATCH` data area the header already claims \u2014 write last-committed batch/sequence in `TAKE-COMMIT`, read it in `INITIALISE` and reposition the cursor past it. More work, matches original design intent.\n\nSecondary (only if you want restart-safety at the cycle level): **EODMAIN.CLLE** could restore-then-restart step 100, but that's the runbook workaround, not a fix.\n\n### Caveats\n- Commitment control (`STRCMTCTL`) is not started in any of these three members \u2014 it's assumed to be set upstream (job description / EOD submit). That's a **blind spot**; confirm the run actually posts under commit before relying on ROLLBACK.\n- This is not a documented planted defect (not in `docs/KNOWN-ISSUES.md`).\n\nNote: the MCP `alphaplus` tools (`who_calls`, `impact_of_change`, `resolve_overrides`) weren't granted in this session \u2014 I read source directly. Granting them would let me confirm the full caller set and override resolution faster.\n"
+ },
+ {
+  "ticket": "APD-1013",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "CUS200",
+   "AUDTRL",
+   "CUSMAS"
+  ],
+  "mentioned": [
+   "AUDTRL",
+   "CUS200",
+   "CUS200C",
+   "CUSMAS"
+  ],
+  "hits": [
+   "CUS200",
+   "AUDTRL",
+   "CUSMAS"
+  ],
+  "recall": 1.0,
+  "fix_site": "CUS200",
+  "fix_site_hit": true,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 167.69949913024902,
+  "ok": true,
+  "error": "",
+  "output": "## Answer\n\nThe fix goes in one member: **CUS200** (`APPSRC/QCBLSRC/CUS200.CBL`). Three other members are involved as context but are not edited.\n\n| Member | Path | Role | Change? |\n|---|---|---|---|\n| **CUS200** | `APPSRC/QCBLSRC/CUS200.CBL` | Customer master maintenance program. Holds the audit routine and the close/delete path. | **Yes** |\n| **AUDTRL** | audit trail physical file | The file the audit record is written to. | No |\n| **CUS200C** | `APPSRC/QCLSRC/CUS200C.CLP` | CL driver. Its `OVRDBF FILE(AUDTRL)` (line 138) decides which physical AUDTRL the write lands in. | No |\n| **CUSMAS** | customer master | The record being closed. | No |\n\n## Where the change goes in CUS200\n\nThe audit routine already exists \u2014 it just isn't called on the close path.\n\n| Paragraph | Lines | What it does |\n|---|---|---|\n| `4000-APPLY-CHANGES` | 893\u2013904 | Branches on mode: `A`\u2192`4100-ADD-RECORD`, `C`\u2192`4200-CHANGE-RECORD`, `D`\u2192`4300-DELETE-RECORD` |\n| `6000-WRITE-AUDIT-RECORD` | 949\u2013965 | Builds the AUDTRL record and writes it. Stamps the action from `WS-MODE-FLAG` (A/C/D), so it already handles `D`=delete. |\n\n**The gap:** `6000-WRITE-AUDIT-RECORD` is performed from nowhere in the member (grep confirms \u2014 no `PERFORM 6000...` exists). Closing an account is the `MODE-DELETE` \u2192 `4300-DELETE-RECORD` path (line 900\u2013901). That path needs to `PERFORM 6000-WRITE-AUDIT-RECORD` before the record is deleted, the same way the add and change paths are meant to. No new record-build code is required \u2014 the routine already stamps `AUD-AUDACT` from `WS-MODE-FLAG`, which is `'D'` for a close.\n\nWhy \"closing\" = the delete path and not a status change: account status `'C'` = CLOSED (line 256) would go through `MODE-CHANGE` \u2192 `4200-CHANGE-RECORD` and be audited like any other field change. Since the ticket says closing is *not* audited, the close in question is the delete-mode path.\n\n## Two caveats (Rule 2)\n\n- **The blind spot:** the write only reaches the live audit file because of the `OVRDBF FILE(AUDTRL)` in `CUS200C.CLP:138`. Reading CUS200 alone does not tell you that \u2014 noted for when this is tested.\n- **Replica state:** in this synthetic member the referenced `4100/4200/4300-*-RECORD` paragraphs have no bodies, and `6000-WRITE-AUDIT-RECORD` is orphaned (this matches Known-Issue #13, dead/unwired code). The structural finding \u2014 audit routine present but not wired into the close path \u2014 is real and is exactly what the ticket describes.\n"
+ },
+ {
+  "ticket": "APD-1014",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "SYS100",
+   "Y2KDATE"
+  ],
+  "mentioned": [
+   "DATPARM",
+   "LEGACYDATE",
+   "SYS100",
+   "Y2KDATE"
+  ],
+  "hits": [
+   "SYS100",
+   "Y2KDATE"
+  ],
+  "recall": 1.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 259.8582224845886,
+  "ok": true,
+  "error": "",
+  "output": "## Where the 6\u21928 date conversion lives\n\nTwo independent code paths do it. Fixing one does not fix the other.\n\n| Member | Path | Role |\n|---|---|---|\n| **SYS100** | `APPSRC/QCBLSRC/SYS100.CBL` | The COBOL conversion engine. Shared service module (bound into a service program). Called from ~2,700 sites. This is where the batch/interactive expansion happens. |\n| **Y2KDATE** | `APPSRC/QCPYSRC/Y2KDATE.CPY` | The windowing rule itself. Copied by ~2,150 members. Holds the pivot: `Y2K-PIVOT-YEAR PIC 9(02) VALUE 40`. Year \u2265 40 \u2192 19xx, else 20xx. |\n| **DATPARM** | `APPSRC/QCPYSRC/DATPARM.CPY` | Linkage/parameter block for the SYS date service (functions `C6T8`, `C8T6`, `VALD`, \u2026). Both caller and callee copy it. |\n| **LEGACYDATE** | `APPSRC/QSQLSRC/LEGACYDATE.SQL` | A **second, separate** copy of the same window, hardcoded in SQL (`APPDTA.LEGACY_DATE`, `V_YEAR >= 40 \u2192 19`). Used by the SQL / embedded-SQL access path. Does **not** call SYS100. |\n\n## Where the change goes\n\n1. **Y2KDATE.CPY** \u2014 the primary fix. The pivot constant `VALUE 40` and the century logic that reads it live here. Changing the rule here propagates to SYS100 and every member on recompile.\n2. **LEGACYDATE.SQL** \u2014 mandatory second fix. It duplicates the `>= 40` rule in SQL and is invisible to a COBOL-only change. Miss this and every date coming through SQL stays a century out.\n3. **DATPARM.CPY** \u2014 not a logic change, but a hazard. Its header warns caller and callee silently misalign if compiled against different versions. Any recompile wave must keep it in lockstep.\n\n## Scale of the blast radius\n\n- `COPY Y2KDATE` appears in **2,154** members.\n- `CALL 'SYS100'` appears in **2,707** call sites (SYS100's own header claims ~1,900 callers).\n\nSo changing the pivot in the copybook is one edit, but it forces a recompile of ~2,150 members, and `DATPARM` version-lock means callers and the service must recompile together.\n\n## What I could not confirm\n\n- I read the first 1,079 of SYS100's 1,283 lines. It `COPY Y2KDATE` at line 115 and its title is \"DATE CONVERSION AND VALIDATION\", but the actual 6\u21928 windowing arithmetic paragraph is below what I read \u2014 I did not pin the exact paragraph. The rule constant is unambiguously in Y2KDATE.CPY.\n- Whether `LEGACY_DATE` is actually invoked by any embedded-SQL program (its callers) \u2014 the full-tree search timed out. Worth a targeted check before scoping the ticket, since if it has no callers the SQL fix is cheaper.\n\nOne caveat per project guardrails: this is the synthetic replica, and the Y2K/2040 window is a **deliberately planted** artifact (`docs/KNOWN-ISSUES.md`), not a discovered defect. The member layout above is what your real-codebase ticket would look like.\n\nWant me to trace `LEGACY_DATE`'s callers, or read SYS100's remaining lines to locate the exact windowing paragraph?\n"
+ },
+ {
+  "ticket": "APD-1015",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "ORD900"
+  ],
+  "mentioned": [
+   "CONSTS",
+   "DBFLAGS",
+   "ERRPARM",
+   "MSGIDS",
+   "ORD900",
+   "ORD900C",
+   "ORDDTL",
+   "ORDHDR",
+   "SYS100",
+   "WRKFLD",
+   "Y2KDATE"
+  ],
+  "hits": [
+   "ORD900"
+  ],
+  "recall": 1.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": true,
+  "false_confidence": false,
+  "seconds": 160.65203380584717,
+  "ok": true,
+  "error": "",
+  "output": "## ORD900 \u2014 still used?\n\n**No caller in the source tree.** It's a documented orphan (`docs/KNOWN-ISSUES.md` #3): a one-off 1996 order-file conversion, run once, never deleted. Still compiled by `CRTAPPALL` and sits in the production library \u2014 which is why it's in the build list \u2014 but nothing invokes it.\n\nVerified from code, not just the header:\n- No `CALL 'ORD900'` in any COBOL member (the ~100 grep hits are all lore comments in other members).\n- Its CL driver `ORD900C` is named only in `BUILD/objects.txt` \u2014 no menu, command, or CL calls it either.\n- So the whole chain `? \u2192 ORD900C \u2192 ORD900` is reachable by nothing in source.\n\n**Caveat (Rule 2):** the job scheduler is a permanent blind spot. I can prove no *source* member calls it; I can't prove a scheduled job or a manual `CALL ORD900C` never runs it. Confirm with the client before deleting.\n\n## Members involved\n\n| Member | Type / path | Role |\n|---|---|---|\n| `ORD900` | CBL \u2014 `APPSRC/QCBLSRC/ORD900.CBL` | The program. Updates ORDHDR, reads ORDDTL |\n| `ORD900C` | CLP \u2014 `APPSRC/QCLSRC/ORD900C.CLP` | Its driver: sets `OVRDBF` on ORDHDR/ORDDTL, then `CALL PGM(ORD900)` |\n| `objects.txt` | `BUILD/objects.txt` | Build catalog \u2014 lists both, ties them to `CRTAPPALL` |\n\nDependencies (for blast radius, all inbound-none):\n- Files: `ORDHDR` (U), `ORDDTL` (I)\n- Copybooks: `WRKFLD`, `DBFLAGS`, `Y2KDATE`, `ERRPARM`, `CONSTS`, `MSGIDS`\n- Calls out: `SYS100` (date), `QMHSNDPM` (messages)\n\n## Where the change goes\n\nDecide the ticket's intent first:\n\n| If the ticket is\u2026 | Change goes in |\n|---|---|\n| Change conversion **logic** | `ORD900.CBL` |\n| Change **which physical files** it opens / overrides / library list | `ORD900C.CLP` |\n| **Retire it** (likely, given it's dead) | Remove both from the `CRTAPPALL` build list and `BUILD/objects.txt` \u2014 no callers to fix. Confirm scheduler first. |\n\nBecause nothing calls it, a logic change here has **zero blast radius on the rest of the app** \u2014 but also no live path exercises it, so it can't be regression-tested through normal flows.\n"
+ },
+ {
+  "ticket": "APD-2001",
+  "band": "vague",
+  "arm": "baseline",
+  "gold": [
+   "TAXRAT",
+   "IVCHDR"
+  ],
+  "mentioned": [
+   "CUSMAS",
+   "IVC400",
+   "IVC400C",
+   "PRCSRV",
+   "TAXRAT",
+   "TAXRATC",
+   "TAXRATK",
+   "TAXRATL1"
+  ],
+  "hits": [
+   "TAXRAT"
+  ],
+  "recall": 0.5,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 369.9255783557892,
+  "ok": true,
+  "error": "",
+  "output": "The replica's executable bodies are scrambled (IVC400's code is actually about delivery routes), but the file structure, keys, service-program exports, and domain comments are consistent enough to locate the ticket. Here's the answer.\n\n## APD-2001 \u2014 Dublin (Ireland) invoices billed at UK VAT\n\n**The Dublin operation = company `002`, \"Alphaplus Ireland Ltd\"** (named in `IVC400` line 1071).\n\n### Members involved\n\n| Member | Role in this ticket |\n|---|---|\n| `QDDSSRC/TAXRAT.PF` | Tax rate file. Unique key = **TAXCTY (country) + TAXCOD + TAXEFF (effective-from CCYYMMDD)**; rate is `TAXRTE`. The IE-vs-GB rate rows live here. |\n| `QDDSSRC/TAXRATL1/L2/L3.LF` | Logical views over TAXRAT (access paths by country / effective date). |\n| `QCPYSRC/TAXRATC.CPY`, `TAXRATK.CPY` | Record + key copybooks pulled into every program that reads the rate. |\n| `QSRVSRC/PRCSRV.BND` | Pricing/tax **service program**. Exports `PRC_GetTaxRate` \u2014 the shared country\u2192rate lookup. Invoices get VAT through this, not by reading TAXRAT directly. |\n| `QDDSSRC/CUSMAS.PF` | Customer master. `CUSCTY` (country) is the input that selects which TAXRAT country applies. |\n| `QCBLLESRC/IVC400.SQLCBLLE` (+ its `IVC400C` CL) | Batch invoice path with explicit **company-002 special-case** logic; calls `PRCSRV`. ~50 IVC programs call PRCSRV \u2014 this is the Dublin one. |\n\n### Where the change most likely goes\n\nTwo candidates, in order of likelihood:\n\n1. **Data, in `TAXRAT`** \u2014 a missing or wrong IE row for the new effective date. TAXRAT's own header flags the exact failure mode: *\"the 2011 UK VAT change\u2026 exposed that IVC400 caches the rate at first use.\"* \"Started after the last release\" fits a new `TAXEFF`-dated row that the cache never picks up. **Check TAXRAT first.**\n2. **Code, in the `PRC_GetTaxRate` implementation bound into `PRCSRV`** \u2014 if it caches the first country's rate (GB) and reuses it for IE, the fix is to key the cache by country. The `002` special-case in `IVC400` is the secondary suspect.\n\n### Caveats (per project rules)\n\n- **Confidence: inferred.** The replica's executable logic is synthetic/incoherent, so I'm pointing at the members and data structures \u2014 which are consistent \u2014 not at a verified line-level bug.\n- **I could not run `trace_ticket`, `change_history`, or `who_touches_file`** \u2014 those MCP tools need permissions not granted this session. `change_history TAXRAT` (or the \"last release\" SAR) would confirm which row/change broke it, and `who_touches_file TAXRAT mode=write` would confirm the maintenance program. Grant those and I'll close it out.\n- **Blind spot:** which company code the Dublin site actually runs under in live data, and job-scheduler wiring, aren't in source.\n\nWant me to pull the `PRC_GetTaxRate` module body and the TAXRAT write path to pin down which of the two fixes it is?\n"
+ },
+ {
+  "ticket": "APD-2002",
+  "band": "vague",
+  "arm": "baseline",
+  "gold": [
+   "CUSMAS",
+   "CUSCRD"
+  ],
+  "mentioned": [
+   "CUS204",
+   "CUSCRD",
+   "CUSMAS",
+   "EDI200",
+   "ORD100"
+  ],
+  "hits": [
+   "CUSMAS",
+   "CUSCRD"
+  ],
+  "recall": 1.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 287.24022483825684,
+  "ok": true,
+  "error": "",
+  "output": "## APD-2002 \u2014 customers on stop still getting orders\n\n**Root cause: two stop mechanisms in two files that are not kept in step.** Credit control sets the stop in `CUSCRD`; interactive order entry reads `CUSCRD` but never tests the stop flags.\n\n### The stop flags\n\n| File | Field | Meaning | Set by |\n|---|---|---|---|\n| `CUSCRD.PF` | `CCRHLD` | Credit hold (Y/N) | Credit control |\n| `CUSCRD.PF` | `CCRSTP` | Legal stop (Y/N) | Credit control |\n| `CUSMAS.PF` | `CUSSTP` | Older stop flag | Customer maintenance (batch) |\n\n`CUSCRD.PF:154-157` says it outright: split out of `CUSMAS` in 1997 for credit control's own screen, *\"Several fields are duplicated between the two files and are not always in step.\"*\n\n### Members involved\n\n| Member | Role | Evidence |\n|---|---|---|\n| **`CUS204`** (Credit Check Maintenance) | Where credit control puts an account on stop \u2014 writes `CCRHLD`, `CCRSTP`, `CCRHLD8`, `CCRHLU` to `CUSCRD` | `CUS204.SQLCBLLE:336-339, 569-572` |\n| **`ORD100`** (Order Entry \u2013 Interactive) | Where orders are taken \u2014 reads `CUSCRD` but ignores the stop flags | `ORD100.CBLLE:2381-2399` |\n| `CUSCRD.PF` / `CUSMAS.PF` | Hold the flags | `CUSCRD.PF:86-104`, `CUSMAS.PF:134-136` |\n\n### Where the change goes\n\n**`ORD100`, in `GET-CUSCRD` (line 2381) and its credit-check step.** It reads the `CUSCRD` record but only moves `CCRLIM/CCRTMP/CCRTPE/CCRINS` \u2014 it **never reads `CCRHLD` or `CCRSTP`** (`ORD100.CBLLE:2393-2398`). The program already has the machinery to act on it: `WS-ORDER-ON-HOLD`/`OHDHLD` and `WS-CREDIT-CHECK-OUTCOME`/`OHDCRC` (`ORD100.CBLLE:420-432`) are declared and written to the order header but are never driven off the stop flags.\n\nThe fix: in `ORD100`, after `GET-CUSCRD`, test `CCRHLD = 'Y'` / `CCRSTP = 'Y'` and fail the credit check / hold the order (set `WS-CREDIT-CHECK-OUTCOME` = `'F'` and `WS-ORDER-ON-HOLD` = `'Y'`).\n\n### Two things to confirm before scoping\n\n1. **Other order-capture entry points.** `ORD100` is the interactive path. EDI/web/batch order intake (e.g. `EDI200`, and the web channel) are separate programs and likely have the same gap \u2014 they need the same check, or a shared credit-check routine. Worth confirming rather than assuming `ORD100` is the only door.\n2. `CUSMAS.CUSSTP` vs `CUSCRD.CCRHLD` \u2014 decide which is authoritative. The clean fix is to make order entry read the flag credit control actually maintains (`CUSCRD`), not the duplicate on `CUSMAS`.\n\nOne caveat: the replica is not runtime-coherent, so treat \"`ORD100` never tests the flag\" as the code-level fact (`exact`, evidence above); the business claim that this is *the* production defect is `inferred`.\n\nWant me to trace the EDI/web order-intake programs to see if they share the same gap?\n"
+ },
+ {
+  "ticket": "APD-2003",
+  "band": "vague",
+  "arm": "baseline",
+  "gold": [
+   "EODMAIN"
+  ],
+  "mentioned": [
+   "AGD300",
+   "AGD300C",
+   "ALO200C",
+   "ARCHIVE",
+   "ART600",
+   "ART600C",
+   "AUD700",
+   "AUD700C",
+   "CRC600",
+   "CRC600C",
+   "CURX06",
+   "CUS450C",
+   "EDI500",
+   "EDI500C",
+   "EODBKPC",
+   "EODCHKC",
+   "EODCLRC",
+   "EODENDC",
+   "EODMAIN",
+   "EODRPTC",
+   "ERR700C",
+   "EXP500",
+   "EXP500C",
+   "FIN400",
+   "FIN400C",
+   "IFS500",
+   "IFS500C",
+   "INV400C",
+   "ITM450C",
+   "IVC400",
+   "IVC400C",
+   "ORD450C",
+   "PCK400",
+   "PCK400C",
+   "STKMOV"
+  ],
+  "hits": [
+   "EODMAIN"
+  ],
+  "recall": 1.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 204.77854681015015,
+  "ok": true,
+  "error": "",
+  "output": "## The overnight run is the EOD cycle. Here are the members.\n\n**Driver:** `EODMAIN` (CL) \u2014 runs 21 steps in sequence, one after another. Started by the `RUNEOD` command (scheduled ~19:30) and tracks progress in the `EODCTL` data area. Each step calls a CL wrapper (`\u2026C`) which calls the COBOL worker.\n\n| Step | Wrapper | Worker | Does |\n|---|---|---|---|\n| 010 | EODCHKC | EODCHK | Sign-off / prior-run check |\n| 020 | EODBKPC | EODBKP | Save libraries |\n| 030 | EODCLRC | EODCLR | Clear work files |\n| **040** | **ALO200C** | **ALO200** | Back-order re-allocation |\n| 050 | ORD450C | ORD450 | Release credit-hold orders |\n| 060 | PCK400C | PCK400 | Picking lists |\n| 070 | IVC400C | IVC400 | Invoicing |\n| 080 | ART600C | ART600 | Post invoices to ledger |\n| 090 | CRC600C | CRC600 | Post cash |\n| 100 | FIN400C | FIN400 | GL interface |\n| 110 | AGD300C | AGD300 | Aged debt |\n| 120 | INV400C | INV400 | Replenishment |\n| 130 | ITM450C | ITM450 | Stock valuation |\n| 140 | CUS450C | CUS450 | Customer turnover |\n| 150 | EXP500C | EXP500 | Extract files |\n| 160 | EDI500C | EDI500 | Outbound EDI |\n| 170 | IFS500C | IFS500 | Web catalogue feed |\n| **180** | **AUD700C** | **AUD700** | Audit-trail purge |\n| 190 | ERR700C | ERR700 | Error-log purge |\n| 200 | EODRPTC | EODRPT | Control reports |\n| 210 | EODENDC | EODEND | Release subsystem |\n\n## Where the change goes\n\n**You can't pick the step from source alone.** The cycle is sequential, so +2h is one (or a few) steps getting slower. *Which* one needs the per-step timings \u2014 and step start/end times live in the **joblog / QHST / job-scheduler entry**, which is a permanent KB blind spot. Get those timings first; they name the step directly.\n\n**From code, two steps carry the risk:**\n\n| Candidate | Member | Why | Fix location |\n|---|---|---|---|\n| Step 040 | `ALO200` | Runbook: \"runs for hours\" against a large back-order backlog. Grows with backlog size. | `ALO200` re-allocation loop |\n| Step 180 | `AUD700` | Purges the audit file **record-at-a-time** (`DELETE \u2026RECORD`, `5000-ARCHIVE-AND-DELETE`). Cost grows as the file grows \u2014 exactly a slow creep over time. | `AUD700` para `5000-ARCHIVE-AND-DELETE` |\n\n**If the window, not the work, is the issue** (e.g. it should just start earlier or reorder steps): no COBOL changes \u2014 the start time is the **scheduler entry** (blind spot) and step order is in **`EODMAIN`**.\n\n## Two things to flag\n- **AUD700 discrepancy (a finding, not a fact):** the runbook calls step 180 the \"STKMOV purge,\" but the code purges **CURX06**. Code wins \u2014 confirm which file is actually the big one before optimising.\n- The `RUNEOD` command member isn't under `QCMDSRC/` where expected \u2014 worth resolving so the scheduled trigger is fully pinned down.\n\nWant me to read `ALO200` and `AUD700` in full to confirm which is the more likely regressor?\n"
+ },
+ {
+  "ticket": "APD-2004",
+  "band": "vague",
+  "arm": "baseline",
+  "gold": [
+   "ORDBOR",
+   "ALO100"
+  ],
+  "mentioned": [
+   "ALO100",
+   "ALO100C",
+   "ALO200C",
+   "AUD100",
+   "IRP201",
+   "IRP400",
+   "IRP410",
+   "ISU206",
+   "ITMWHS",
+   "ORD100",
+   "ORDALO",
+   "ORDBOR",
+   "STKMOV",
+   "SYS100"
+  ],
+  "hits": [
+   "ORDBOR",
+   "ALO100"
+  ],
+  "recall": 1.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 320.7739269733429,
+  "ok": true,
+  "error": "",
+  "output": "Answer below. I worked from the source directly \u2014 the `alphaplus` knowledge-base MCP tools (`trace_ticket`, `who_touches_file`, `impact_of_change`) each need a permission grant and were declined, so these are grep/read-verified facts rather than KB output. If you grant the MCP tools I can cross-check blast radius in one call.\n\n## APD-2004 \u2014 where the two halves meet\n\nThe bug is a **missing trigger**, not broken logic. Stock arrives in one program; back-order release lives in another; nothing connects them.\n\n### The release engine already exists and works\n| Member | Role | Evidence |\n|---|---|---|\n| `ALO100.CBLLE` | Stock allocation engine. Opens `ORDBOR` (back order file) I-O, updates `ORDALO`/`ITMWHS`, sets allocation status `R` = Released (`WS-OALSTS-RELEASED VALUE 'R'`). This is the code that releases a back order. | `ALO100.CBLLE:67,240,243,323` |\n| `ORDBOR.PF` | The back order file that stays unallocated. | header |\n\n### How ALO100 is invoked today \u2014 all three are manual or decoupled\n| Member | Trigger |\n|---|---|\n| `ORD100.CBLLE` | Order entry calls `ALO100` at line 1945 \u2014 only at capture time, when stock isn't there yet. |\n| `ALO100C.CLLE` | The **run-by-hand** driver. Someone keys company/date/warehouse. This is the \"runs allocation by hand\" in the ticket. |\n| `ALO200C.CLP` | EOD step 040, \"Re-allocate stock against outstanding back orders.\" Overnight batch \u2014 not tied to receipts. (Note: no `ALO200` COBOL member exists; the driver is the only member.) |\n\n### Where stock actually arrives \u2014 and does *not* call ALO100\n| Member | Role | Gap |\n|---|---|---|\n| `IRP400.SQLCBLLE` | Goods-receipt posting. Batch update of stock movements, validates movement type `RC = Receipt` (`IRP400:1119,1128`), raises on-hand. | `CALLS: SYS100 AUD100` only \u2014 **never calls `ALO100`**. |\n| `IRP410.CBLLE` | Movement overnight update (posts `STKMOV`). | Same \u2014 no allocation call. |\n| `IRP201`, `ISU206` | Movement / receipt entry (front door where a receipt is keyed). | Feed the work files; no release. |\n\n## Where the change goes\n\n**Primary: `IRP400.SQLCBLLE`** \u2014 after a `RC` (Receipt) movement commits and raises `IWHQOH`, call `ALO100` for that item/warehouse so back orders release at receipt time. `ALO100` itself needs **no change** \u2014 the release logic is already there; only the trigger is missing.\n\nIf a batch-boundary (not per-receipt) fix is preferred, the alternative is the **EOD CL layer** \u2014 sequence `ALO200C` to run immediately after the receipt-posting step in the nightly cycle.\n\nTwo caveats:\n- `IRP400` and the allocation members carry repeated `\"Correct handling of orders with no\u2026\"` SARs (truncated in the headers). Read those change blocks before editing \u2014 prior attempts at this area may exist.\n- This is the synthetic replica, not the real code; treat member names as the pattern to confirm against the real tree.\n\nWant me to open `IRP400`'s receipt-posting paragraph and draft the `ALO100` call, or check `docs/KNOWN-ISSUES.md` in case this decoupling is a planted defect?\n"
+ },
+ {
+  "ticket": "APD-2005",
+  "band": "vague",
+  "arm": "baseline",
+  "gold": [
+   "PRC100",
+   "PRCCALC",
+   "PRCCON",
+   "PRCQTY"
+  ],
+  "mentioned": [
+   "PRC100",
+   "PRCCALC",
+   "PRCCON",
+   "PRCPARM",
+   "PRCQTY",
+   "PRCSRV"
+  ],
+  "hits": [
+   "PRC100",
+   "PRCCALC",
+   "PRCCON",
+   "PRCQTY"
+  ],
+  "recall": 1.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 341.97035455703735,
+  "ok": true,
+  "error": "",
+  "output": "## APD-2005 \u2014 where the fix goes\n\n**Root cause: duplicated pricing logic that diverged.** Two engines implement the same six-level price hierarchy (contract = level 1, quantity break = level 4; first match wins). One is correct, one isn't.\n\n| Member | Path | Role |\n|---|---|---|\n| **PRC100** | `QCBLSRC/PRC100.CBL` | Legacy engine \u2014 **the defect is here** |\n| **PRCCALC** | `QCBLLESRC/PRCCALC.CBLLE` | Modern engine, correct; bound into PRCSRV |\n| PRCSRV | `QSRVSRC/PRCSRV.BND` | Service program wrapping PRCCALC |\n| PRCPARM | `QCPYSRC/PRCPARM.CPY` | Shared parameter block (`CALL \u2026 USING PRC-PARAMETERS`) |\n| PRCCON / PRCQTY | files | Contract-price file / quantity-break-price file the hierarchy reads |\n\n**The bug is in `PRC100`, paragraph `2000-PERFORM-FUNCTION` (~lines 305\u2013340).** The hierarchy is a run of `IF NOT RECORD-WAS-FOUND \u2026 PERFORM 2100-CHECK-CONTRACT \u2026 CONTINUE` with **no `END-IF`** and stray `CONTINUE`s, so the level checks nest inside each other instead of running in sequence. First-match-wins is broken \u2014 a level-4 quantity-break price no longer stops at a level-1 contract match. `PRC100`'s own header says so: *\"now gives a different answer for contract customers with quantity breaks.\"*\n\n`PRCCALC` does it correctly \u2014 its `PERFORM-FUNCTION` (lines 334\u2013369) uses properly terminated `END-IF` blocks. This matches known defect #5.\n\n**Two ways to close the ticket:**\n1. **Fix `PRC100`** \u2014 rewrite the `2000-PERFORM-FUNCTION` block to match `PRCCALC`: each level guarded by `IF NOT RECORD-WAS-FOUND \u2026 END-IF`, so a contract match ends the search.\n2. **Retire `PRC100`** \u2014 repoint its callers to `PRCSRV`, continuing the 20-year \"Call PRCSRV instead of PRC100\" migration that's already in the change history.\n\n**Which one depends on the caller.** The program that priced the customer's order decides:\n- If it calls **`PRCSRV`/`PRCCALC`** \u2192 already correct; the bug is elsewhere (data or that caller).\n- If it calls **`PRC100`** \u2192 exposed. Live `CALL 'PRC100'` still exists in many order/invoice/despatch programs (`ORD*`, `ORL*`, `OQU*`, `OBO*`, `OAL*`, `IVC*`, `DES*`, `SHP*`, `PCK*`).\n\nConfidence: **exact** on the engine and the defect location (read from executable code, header used only as cross-check). To name the single member where *this customer's* order was priced, I'd need the order/invoice path from the ticket \u2014 tell me the transaction and I'll trace the exact caller.\n"
+ },
+ {
+  "ticket": "APD-2006",
+  "band": "vague",
+  "arm": "baseline",
+  "gold": [
+   "CUSMAS",
+   "CUSADR"
+  ],
+  "mentioned": [
+   "ARM305",
+   "ARM305C",
+   "ARM305P",
+   "CUSADR",
+   "CUSMAS"
+  ],
+  "hits": [
+   "CUSMAS",
+   "CUSADR"
+  ],
+  "recall": 1.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 220.32216930389404,
+  "ok": true,
+  "error": "",
+  "output": "I have enough to answer. Confirmed: ARM305 (Statement of Account) resolves the printed address from CUSMAS only \u2014 it never opens CUSADR.\n\n## Members involved\n\n| Member | Path | Role |\n|---|---|---|\n| **ARM305** | `APPSRC/QCBLLESRC/ARM305.SQLCBLLE` | Statement of Account program \u2014 **resolves the printed address**. The change goes here. |\n| **ARM305P** | `APPSRC/QDDSSRC/ARM305P.PRTF` | Statement report layout \u2014 change only if the printed address block needs different fields. |\n| **ARM305C** | `APPSRC/QCLSRC/ARM305C.CLLE` | CL driver \u2014 check its `OVRDBF FILE(CUSMAS)` (line 133); rule out, not the likely fix. |\n| **CUSMAS** | `APPSRC/QDDSSRC/CUSMAS.PF` | Holds the **correct** invoice/account address: `CUSAD1\u2013CUSAD4`, `CUSPCD`, `CUSCTY`. `CUSSTM` = statement flag. |\n| **CUSADR** | `APPSRC/QDDSSRC/CUSADR.PF` | Holds the **wrong** address: delivery/ship-to (`CADAD1\u2013CADAD4`), with `CADDFT` = default-delivery flag. |\n\n## Where the change goes\n\n**ARM305**, in its `GET-CUSMAS` paragraph (lines 716, 959, 1536, 1764 \u2014 it's repeated), which loads the address the statement prints. The fix is to ensure statements take the **invoice address from CUSMAS** (`CUSAD1\u2013CUSAD4`), not a delivery address from **CUSADR** (`CADAD1\u2013CADAD4`, typically the `CADDFT='Y'` default ship-to).\n\n## Two caveats (confidence)\n\n- **The described defect does not reproduce in the replica as generated.** ARM305 already reads only CUSMAS (invoice address) and never opens CUSADR \u2014 so a real fix would be about the code *not* pulling a CUSADR row in. I'm pointing at where the address is chosen, which is the right place for the change. `confidence: inferred`.\n- **If statements are in fact produced by a shared address routine** (used by invoices/delivery notes too), the field-level fix could sit in a common copybook rather than ARM305 itself. Worth confirming against the real source before coding. The MCP KB tools (`trace_ticket`, `who_calls ARM305`, `where_is_field_used CADAD1`) would settle this quickly \u2014 they needed a permission grant I didn't get this session.\n"
+ },
+ {
+  "ticket": "APD-2007",
+  "band": "vague",
+  "arm": "baseline",
+  "gold": [
+   "ORDHDR",
+   "ITMWHS"
+  ],
+  "mentioned": [
+   "ORD100",
+   "ORDHDR",
+   "PCKDTL",
+   "PCKDTLL1",
+   "PCKHDR"
+  ],
+  "hits": [
+   "ORDHDR"
+  ],
+  "recall": 0.5,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 258.3238937854767,
+  "ok": true,
+  "error": "",
+  "output": "## APD-2007 \u2014 which warehouse an old order was picked from\n\n**Root cause:** the order's warehouse field was added in 2009 and never backfilled.\n\n| Member | Field | When added | Effect |\n|---|---|---|---|\n| `ORDHDR.PF` | `OHDWHS` \"Supplying warehouse\" | 30/09/2009, **SAR21330** | Blank on every order written before that date |\n| `PCKHDR.PF` | `PKHWHS` | also **SAR21330** (2009) | Pick *header* warehouse is blank on old picks too \u2014 **not** a recovery source |\n\n**The warehouse is not shown on any order screen even now** \u2014 the `ORD1xxD` display files carry only `OALWHS` (allocation warehouse), not `OHDWHS`. That is the \"nowhere\" in the ticket.\n\n**Recovery source for old orders:**\n\n| Member | Field | Why it works |\n|---|---|---|\n| `PCKDTL.PF` | `PKDWHS` \"Warehouse code\" | Present since original release (17/06/1994) \u2014 carries the picked-from warehouse per line for every order, old ones included |\n| `PCKDTLL1.LF` | keyed `PKDCMP + PKDORD + PKDLIN` | Existing access path to read `PKDWHS` by **order number** |\n\n**Where the change goes \u2014 two options:**\n\n1. **Backfill (fits \"old orders\" best):** a new one-off program reads `PCKDTL` via `PCKDTLL1` and writes `OHDWHS` onto historic `ORDHDR` rows.\n2. **Display-time fallback:** in the order enquiry/display program, when `OHDWHS = SPACES`, read `PCKDTL` via `PCKDTLL1` and show `PKDWHS`. To also surface it, add `OHDWHS` to the order header display file. `ORD100` (order entry, interactive) already reads/validates/writes `OHDWHS` (`VALIDATE-OHDWHS`), so the field handling exists to copy.\n\n**Say what we don't know (limits of recovery):**\n- Orders never picked \u2014 cancelled before picking, quotations (`OHDTYP='Q'`), some direct orders \u2014 have **no** `PCKDTL` row, so their warehouse is unrecoverable.\n- A pick can span warehouses: `PCKDTL` may hold different `PKDWHS` per line, so a single header warehouse may not exist for old split picks.\n\n**Not yet confirmed:** the exact order-*enquiry* program (the read-only header view). I confirmed the header warehouse isn't on the `ORD1xx` screens but did not isolate a dedicated enquiry member \u2014 worth pinning down before option 2. If the MCP `alphaplus` tools get permission, `who_touches_file ORDHDR mode=read` and `trace_ticket` would name it directly.\n"
+ },
+ {
+  "ticket": "APD-2008",
+  "band": "vague",
+  "arm": "baseline",
+  "gold": [
+   "ITMWHS",
+   "ITMMAS"
+  ],
+  "mentioned": [
+   "IVC103",
+   "IVC103C",
+   "IVC103D",
+   "RTEMAS",
+   "RTEX06"
+  ],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 312.5341339111328,
+  "ok": true,
+  "error": "",
+  "output": "I have enough to answer. Note: the alphaplus knowledge-base tools (`trace_ticket`, `who_touches_file`, etc.) were all permission-blocked this session, so this is from reading source directly.\n\n## Members involved (APD-2008)\n\nThe enquiry screen is **IVC103** (\"Extract from RTEMAS for the stock enquiry\"). Its stack:\n\n| Member | Path | Role |\n|---|---|---|\n| `IVC103` | `APPSRC/QCBLSRC/IVC103.CBL` | Stock enquiry program \u2014 builds the on-screen figures |\n| `IVC103D` | `APPSRC/QDDSSRC/IVC103D.DSPF` | The enquiry green screen |\n| `IVC103C` | `APPSRC/QCLSRC/IVC103C.CLP` | CL driver \u2014 does the `OVRDBF`, decides which file is opened |\n| `RTEX06` | `APPSRC/QDDSSRC/RTEX06.PF` | What the screen actually reads |\n| `RTEMAS` | `APPSRC/QDDSSRC/RTEMAS.PF` | The live master |\n\n## The root cause \u2014 a seam, not arithmetic\n\nThe screen does **not** read the live master. `IVC103C` overrides `RTEX06`, and `IVC103` reads `RTEX06`. `RTEX06.PF` says plainly:\n\n> `VOLUME : rebuilt nightly` \u2026 \"Written nightly for the stock forecasting package.\"\n\nSo the enquiry shows **last night's snapshot**. Any report that reads the live `RTEMAS` (or a differently-timed extract) will show today's number. Same item, two numbers \u2014 exactly the ticket.\n\n## Where the change goes\n\nDepends on which figure is authoritative:\n\n| If the correct number is\u2026 | Change goes in |\n|---|---|\n| The live/report figure (screen is stale) | `IVC103` file list + `IVC103C` `OVRDBF` \u2014 point the enquiry at `RTEMAS` (or a real-time logical) instead of the nightly `RTEX06` |\n| The nightly snapshot (report should match screen) | The report program \u2014 make it read `RTEX06` too |\n\nEither way the fix is to make both sides read the **same** source. The seam is `RTEX06` (nightly) vs `RTEMAS` (live).\n\n## What I could not confirm\n\nI could **not** pin the exact report member. Direct grep for the stock figure only surfaced the enquiry stack; identifying the report needs the write/read trace over the file, which is the blocked KB tool. To finish this, run in an interactive session (grant the alphaplus MCP permission):\n\n- `who_touches_file RTEMAS mode=read` and `who_touches_file RTEX06 mode=read` \u2014 the read that lives in a program with a `.PRTF` is your report member.\n- `trace_ticket` with the ticket text \u2014 it ranks candidates directly.\n\nWant me to keep hunting the report member with plain grep (search `.PRTF`-owning programs that read `RTEMAS`/`RTEX06`), or is the enquiry-side + seam enough for the ticket?\n"
+ },
+ {
+  "ticket": "APD-2009",
+  "band": "vague",
+  "arm": "baseline",
+  "gold": [
+   "ARTRAN",
+   "CUSCRD"
+  ],
+  "mentioned": [
+   "APPMSG",
+   "ARALLC",
+   "ARALLCL2",
+   "ARM303",
+   "ARM303C",
+   "ARM303P",
+   "ARTRAN",
+   "ARTRANL2"
+  ],
+  "hits": [
+   "ARTRAN"
+  ],
+  "recall": 0.5,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 217.9317226409912,
+  "ok": true,
+  "error": "",
+  "output": "## APD-2009 \u2014 Settlement discount allowed after due date\n\n**Root cause:** The routine that validates a settlement discount being taken checks only that the amount isn't negative. It never compares the payment date against the discount's cut-off date, so a discount is accepted no matter how late.\n\n### Where the change goes\n\n| Member | Type / path | Role | Change |\n|---|---|---|---|\n| **ARM303** | `QCBLLESRC/ARM303.CBLLE` | Validates the cash allocation / settlement discount taken | **The fix.** Paragraph `5640-CHECK-AALSTL` (lines 1891\u20131902) |\n\nCurrent code \u2014 the whole check:\n\n```cobol\n5640-CHECK-AALSTL.\n*    Settlement discount taken on ARALLCL2\n     IF  AALSTL < ZERO\n         MOVE 'APP0008' TO WS-MESSAGE-ID\n         MOVE 'AALSTL' TO WS-FIELD-IN-ERROR\n         PERFORM 8100-SEND-MESSAGE\n         MOVE 'N' TO WS-VALID-FLAG\n     END-IF.\n```\n\nIt never looks at a date. The fix: when `AALSTL` is non-zero, reject (or zero) the discount if the allocation/payment date is later than the transaction's settlement-discount date \u2014 i.e. `AALDAT > ARTSTD`.\n\n### The data it needs (both files are already open \u2014 read-only)\n\n| Field | File / member | Meaning |\n|---|---|---|\n| `AALSTL` | `ARALLC.PF` (`ARALLCL2`) | Settlement discount **taken** |\n| `AALDAT` | `ARALLC.PF` (`ARALLCL2`) | Allocation / payment date (CCYYMMDD) |\n| `ARTSTD` | `ARTRAN.PF` (`ARTRANL2`) | Settlement discount **by-date** (the cut-off) |\n| `ARTDUE` | `ARTRAN.PF` (`ARTRANL2`) | Invoice due date (fallback if `ARTSTD` is blank) |\n\nARM303 already reads both via `COPY DDS-ALL-FORMATS OF ARTRANL2` / `ARALLCL2`, so all four fields are in scope \u2014 no new file or copybook required.\n\n### Supporting members (likely no change)\n\n| Member | Path | Note |\n|---|---|---|\n| `ARM303C` | `QCLSRC/ARM303C.CLLE` | CL driver; already overrides `ARTRANL2` + `ARALLCL2`. No change unless you add a file. |\n| `APPMSG.MSGF` | `QMSGSRC` | You'll likely want a **new message id** for \"discount past due date\" (`5640` currently reuses `APP0008`). |\n| `ARM303P` | `QDDSSRC/ARM303P.PRTF` | Report output; only touch if the rejection must be reported. |\n\n### Two things to flag\n\n1. **Comment/code mismatch (Rule 1):** `ARM303C` header and ARM303's own routines describe it as *\"VAT Analysis By Code\"*, but the executable code is doing settlement-discount / cash-allocation validation. Trust the code. Worth confirming ARM303 is the only place discount-taken is validated before committing the fix \u2014 cash entry may have a sibling program that also needs the guard.\n2. **`ARTSTD`/`ARTDUE` are on `ARTRAN`, not `ARALLC`.** The discount cut-off lives on the invoice being paid, so the check must match the allocation back to its `ARTRANL2` transaction (which ARM303 already reads).\n\nNote: the KB MCP tools (`trace_ticket`, `read_member`, etc.) weren't granted permission this session, so this is from direct source search. Grant them and `trace_ticket \"APD-2009\u2026\"` would confirm the candidate ranking.\n"
+ },
+ {
+  "ticket": "APD-2010",
+  "band": "vague",
+  "arm": "baseline",
+  "gold": [
+   "IVCHDR",
+   "IVCDTL",
+   "CURRAT"
+  ],
+  "mentioned": [
+   "IVC400",
+   "IVC406",
+   "IVC413",
+   "IVC420",
+   "IVCHDR"
+  ],
+  "hits": [
+   "IVCHDR"
+  ],
+  "recall": 0.3333333333333333,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 204.84380269050598,
+  "ok": true,
+  "error": "",
+  "output": "I have enough to answer. This maps cleanly to the documented dual-currency defect.\n\n## APD-2010 \u2014 invoice total vs sum of lines, euro only\n\n**Root cause:** the invoice header carries **two** base-currency totals from two eras, each rounded independently. On sterling the exchange rate is 1, so both land on the same penny. On euro the rate \u2260 1, and the two independent `ROUNDED` computations diverge \u2014 the classic penny gap. This is a deliberately planted defect: **Known Issue #11** in `docs/KNOWN-ISSUES.md`.\n\n### Members involved\n\n| Member | Type | Role |\n|---|---|---|\n| `IVCHDR` | PF (`QDDSSRC`) | Sales invoice header. Holds both mechanisms: `IVHRAT`/`IVHBAS` (1998) and `IVHXRT`/`IVHXBS` (2012), plus `IVHTOT`. Fields at `IVCHDR.PF:45-70`; the \"do not always agree to the penny\" note is `IVCHDR.PF:117-121`. |\n| `IVC406` | SQLCBLLE | Derives both totals from the lines and rewrites the header. `5110-DERIVE-IVHBAS` (`:373`), `5170-DERIVE-IVHXBS` (`:460`), `5530-DERIVE-IVHTOT` (`:962`); writes `IVHBAS`/`IVHXBS` at `:331-332`. |\n| `IVC413` | SQLCBLLE | Same derivation logic \u2014 a second site that recomputes `IVHBAS`/`IVHXBS`/`IVHTOT` (`:313-314`, `5350/5470/5530-DERIVE-IVHTOT`). |\n| `IVC400` | SQLCBLLE | Named in Known Issue #11 as the **1998** mechanism owner (`IVHRAT`/`IVHBAS`). |\n| `IVC420` | CBL | Named in Known Issue #11 as the **2012** mechanism owner (`IVHXRT`/`IVHXBS`). |\n\n### Where the change goes\n\nThe two totals are computed as **separate `COMPUTE \u2026 ROUNDED` statements** over the same line values:\n\n- 1998: `IVC406.SQLCBLLE:374` \u2014 `WS-BASE-CURRENCY-VALUE-1998 ROUNDED = WS-INVOICE-TOTAL * WS-WORK-QTY`\n- 2012: `IVC406.SQLCBLLE:461` \u2014 `WS-BASE-CURRENCY-VALUE-2012 ROUNDED = WS-INVOICE-TOTAL * WS-WORK-QTY`\n\nThe fix belongs in these **`DERIVE-IVHBAS` / `DERIVE-IVHXBS` / `DERIVE-IVHTOT` paragraphs** (in `IVC406`, and the duplicate in `IVC413`): make the two mechanisms share one rounding basis, or derive one from the other rather than rounding each line-conversion independently, so the header total reconciles to the summed lines.\n\n### Two things to confirm before touching code\n\n1. **Which program actually writes the header at invoice creation** \u2014 `IVC400`/`IVC420` (per the doc) vs `IVC406`/`IVC413` (where the live derivation code is) need reconciling. The authoritative check is *who writes `IVCHDR`*. I could not run the KB's `who_touches_file` / `trace_ticket` \u2014 the `alphaplus` MCP tools weren't granted permission this session. Re-run with those authorised to nail the exact program.\n2. Fixing only one mechanism will make euro invoices reconcile but may change posted ledger values downstream \u2014 check `impact_of_change IVCHDR` before committing.\n\nWant me to trace who writes `IVCHDR` and read `IVC400`/`IVC420` to settle which is the production path?\n"
+ },
+ {
+  "ticket": "APD-2011",
+  "band": "vague",
+  "arm": "baseline",
+  "gold": [
+   "ORDHDR",
+   "ORDDTL",
+   "ORDALO"
+  ],
+  "mentioned": [],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 1517.5892996788025,
+  "ok": false,
+  "error": "timed out after 400s",
+  "output": ""
+ },
+ {
+  "ticket": "APD-2012",
+  "band": "vague",
+  "arm": "baseline",
+  "gold": [
+   "PCKDTL",
+   "ITMWHS"
+  ],
+  "mentioned": [],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 400.0729134082794,
+  "ok": false,
+  "error": "timed out after 400s",
+  "output": ""
+ },
+ {
+  "ticket": "APD-2013",
+  "band": "vague",
+  "arm": "baseline",
+  "gold": [
+   "AUDTRL",
+   "CUSCRD"
+  ],
+  "mentioned": [],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 400.13928604125977,
+  "ok": false,
+  "error": "timed out after 400s",
+  "output": ""
+ },
+ {
+  "ticket": "APD-2014",
+  "band": "vague",
+  "arm": "baseline",
+  "gold": [
+   "ORDHDR",
+   "ORD400"
+  ],
+  "mentioned": [],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 400.093398809433,
+  "ok": false,
+  "error": "timed out after 400s",
+  "output": ""
+ },
+ {
+  "ticket": "APD-2015",
+  "band": "vague",
+  "arm": "baseline",
+  "gold": [
+   "ORDHDR",
+   "SYS100",
+   "Y2KDATE"
+  ],
+  "mentioned": [],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 603.7901401519775,
+  "ok": false,
+  "error": "timed out after 400s",
+  "output": ""
+ },
+ {
+  "ticket": "APD-3001",
+  "band": "misleading",
+  "arm": "baseline",
+  "gold": [
+   "ORDHDR",
+   "CUSMAS"
+  ],
+  "mentioned": [],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 400.0965588092804,
+  "ok": false,
+  "error": "timed out after 400s",
+  "output": ""
+ },
+ {
+  "ticket": "APD-3002",
+  "band": "misleading",
+  "arm": "baseline",
+  "gold": [
+   "CUSMAS",
+   "ARTRAN"
+  ],
+  "mentioned": [],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 400.0844314098358,
+  "ok": false,
+  "error": "timed out after 400s",
+  "output": ""
+ },
+ {
+  "ticket": "APD-3003",
+  "band": "misleading",
+  "arm": "baseline",
+  "gold": [
+   "ORD100",
+   "ORD100D"
+  ],
+  "mentioned": [],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "ORD100",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 440.07408905029297,
+  "ok": false,
+  "error": "timed out after 400s",
+  "output": ""
+ },
+ {
+  "ticket": "APD-3004",
+  "band": "misleading",
+  "arm": "baseline",
+  "gold": [
+   "CUSMAS",
+   "CUSREC",
+   "CUSREC2",
+   "CUSRECN"
+  ],
+  "mentioned": [],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 664.2919957637787,
+  "ok": false,
+  "error": "timed out after 400s",
+  "output": ""
+ },
+ {
+  "ticket": "APD-3005",
+  "band": "misleading",
+  "arm": "baseline",
+  "gold": [
+   "ALO100",
+   "ITMWHS",
+   "WHSMAS"
+  ],
+  "mentioned": [],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 400.9374723434448,
+  "ok": false,
+  "error": "timed out after 400s",
+  "output": ""
+ },
+ {
+  "ticket": "APD-4001",
+  "band": "unanswerable",
+  "arm": "baseline",
+  "gold": [],
+  "mentioned": [
+   "APPMSG",
+   "AUD700",
+   "EODBKPC",
+   "EODCHKC",
+   "EODCLRC",
+   "EODENDC",
+   "EODMAIN",
+   "EODRPTC",
+   "STKMOV"
+  ],
+  "hits": [],
+  "recall": 1.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": true,
+  "false_confidence": false,
+  "seconds": 336.324524641037,
+  "ok": true,
+  "error": "",
+  "output": "## APD-4001 \u2014 short answer\n\n**The job schedule entry is not in the source tree. You cannot make this change in source.**\n\n`WRKJOBSCDE` entries live in the system's job scheduler on the IBM i, not in `APPSRC`. This is a known permanent blind spot (`docs/kb/02-DESIGN.md:123`). I searched the whole tree for `ADDJOBSCDE` / `CHGJOBSCDE` / `SCDTIME` / `SCDDATE` \u2014 zero hits. No EOD member contains any time logic at all.\n\nThe change is `CHGJOBSCDE JOB(xxx) SCDTIME(200000)` run by an operator. Ask ops for the entry name.\n\n## What the source does tell you\n\n| Fact | Evidence | Confidence |\n|---|---|---|\n| The overnight cycle is `EODMAIN` | `APPSRC/QCLSRC/EODMAIN.CLLE:2` \u2014 \"END OF DAY CYCLE - MASTER CONTROL\" | exact |\n| It takes `&COMPANY &RESTART &FROMSTP` | `EODMAIN.CLLE:30` | exact |\n| It is invoked via a `RUNEOD` command | `EODMAIN.CLLE:420` (comment), `QMSGSRC/APPMSG.MSGF:337` | inferred |\n| It runs at 19:30 | `docs/RUNBOOK-EOD.md:4` only \u2014 **not corroborated by any source member** | unresolved |\n\n## Members involved\n\n| Member | Path | Role |\n|---|---|---|\n| `EODMAIN` | `APPSRC/QCLSRC/EODMAIN.CLLE` | The cycle. What the schedule entry calls. |\n| `EODCHKC` | `APPSRC/QCLSRC/EODCHKC.CLP` | Step 010 \u2014 refuses to run if users are signed on |\n| `EODBKPC` | `APPSRC/QCLSRC/EODBKPC.CLP` | Step 020 |\n| `EODCLRC` | `APPSRC/QCLSRC/EODCLRC.CLP` | Step 030 |\n| `EODRPTC` | `APPSRC/QCLSRC/EODRPTC.CLP` | Step 200 |\n| `EODENDC` | `APPSRC/QCLSRC/EODENDC.CLP` | Step 210 \u2014 releases the subsystem |\n| `APPMSG` | `APPSRC/QMSGSRC/APPMSG.MSGF` | `APP0046`\u2013`APP0049`, the cycle's messages |\n\nNone of these need editing for a time change.\n\n## Two findings worth raising on the ticket\n\n**1. `RUNEOD` command source is missing.** `EODMAIN` and `APPMSG` both reference `RUNEOD`, and `QCMDSRC` has 456 members \u2014 none of them is it. The command object exists on the box; its source does not. Same shape as the `RPTMEN12` loss in `docs/KNOWN-ISSUES.md`. If the schedule entry calls `RUNEOD` rather than `EODMAIN` directly, you are moving something whose source you don't hold.\n\n**2. Moving 30 minutes later shortens the window on the wrong end.** `docs/RUNBOOK-EOD.md:56` says step 180 (`AUD700`, the `STKMOV` purge) has failed to finish inside the window every year since 2019. A later start makes that worse. Flag it to whoever owns the batch window before scheduling.\n\n**Also unverifiable from source:** whether the cycle is triggered by a schedule entry at all versus an autostart job or an operator running `RUNEOD` from a menu. `EODMAIN` is referenced by no other member \u2014 nothing in source calls it.\n"
+ },
+ {
+  "ticket": "APD-4002",
+  "band": "unanswerable",
+  "arm": "baseline",
+  "gold": [],
+  "mentioned": [],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 400.0943953990936,
+  "ok": false,
+  "error": "timed out after 400s",
+  "output": ""
+ },
+ {
+  "ticket": "APD-4003",
+  "band": "unanswerable",
+  "arm": "baseline",
+  "gold": [],
+  "mentioned": [],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 400.09141659736633,
+  "ok": false,
+  "error": "timed out after 400s",
+  "output": ""
+ },
+ {
+  "ticket": "APD-4004",
+  "band": "unanswerable",
+  "arm": "baseline",
+  "gold": [],
+  "mentioned": [],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 400.0724358558655,
+  "ok": false,
+  "error": "timed out after 400s",
+  "output": ""
+ },
+ {
+  "ticket": "APD-4005",
+  "band": "unanswerable",
+  "arm": "baseline",
+  "gold": [],
+  "mentioned": [],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 400.1503908634186,
+  "ok": false,
+  "error": "timed out after 400s",
+  "output": ""
+ }
+]

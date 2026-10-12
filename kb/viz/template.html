@@ -1,0 +1,1147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ALPHAPLUS — codebase map</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#141a22; --panel2:#1b232d; --line:#263140;
+    --fg:#d7e0ea; --dim:#7d8b9c; --dimmer:#4d5867; --accent:#4ea1ff;
+    --warn:#ffb454; --bad:#ff5c5c;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);
+    font:13px/1.45 ui-monospace,"Cascadia Mono",Consolas,Menlo,monospace}
+  #app{display:flex;height:100%}
+  canvas{display:block;cursor:grab}
+  canvas.drag{cursor:grabbing}
+  #stage{position:relative;flex:1;min-width:0}
+
+  .side{width:300px;flex:0 0 300px;background:var(--panel);border-right:1px solid var(--line);
+    overflow-y:auto;overflow-x:hidden}
+  #detail{border-right:0;border-left:1px solid var(--line);width:330px;flex-basis:330px;display:none}
+  #detail.on{display:block}
+  .side::-webkit-scrollbar,#detail::-webkit-scrollbar{width:9px}
+  .side::-webkit-scrollbar-thumb{background:#2b3542;border-radius:5px}
+
+  h1{font-size:13px;margin:0;padding:12px 14px 4px;letter-spacing:.14em;color:var(--fg)}
+  .sub{padding:0 14px 12px;color:var(--dim);font-size:11px;border-bottom:1px solid var(--line)}
+  section{border-bottom:1px solid var(--line);padding:11px 14px}
+  h2{font-size:10px;letter-spacing:.16em;color:var(--dim);margin:0 0 9px;text-transform:uppercase;
+    display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none}
+  h2 .car{color:var(--dimmer)}
+  section.shut .body{display:none}
+
+  label.row{display:flex;align-items:center;gap:7px;padding:2.5px 0;cursor:pointer;font-size:12px}
+  label.row:hover{color:#fff}
+  input[type=checkbox]{accent-color:var(--accent);margin:0;flex:0 0 auto}
+  .sw{width:9px;height:9px;border-radius:2px;flex:0 0 auto}
+  .ct{margin-left:auto;color:var(--dimmer);font-size:10.5px;font-variant-numeric:tabular-nums}
+  .mini{font-size:10.5px;color:var(--dim);margin:6px 0 0;line-height:1.5}
+
+  button,select,input[type=text]{background:var(--panel2);color:var(--fg);border:1px solid var(--line);
+    border-radius:4px;padding:5px 8px;font:inherit;font-size:12px}
+  button{cursor:pointer}
+  button:hover{border-color:var(--accent);color:#fff}
+  button.on{background:var(--accent);border-color:var(--accent);color:#06121f}
+  .btns{display:flex;gap:5px;flex-wrap:wrap}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  input[type=text]{width:100%}
+
+  #search{position:relative}
+  #hits{position:absolute;top:100%;left:0;right:0;z-index:20;background:var(--panel2);
+    border:1px solid var(--line);border-top:0;max-height:290px;overflow-y:auto;display:none}
+  #hits.on{display:block}
+  #hits div{padding:4px 8px;cursor:pointer;display:flex;gap:7px;align-items:center;font-size:12px}
+  #hits div:hover,#hits div.sel{background:#22303f}
+  #hits .t{color:var(--dimmer);margin-left:auto;font-size:10px}
+
+  #tip{position:absolute;pointer-events:none;background:#05090ee6;border:1px solid var(--line);
+    padding:5px 8px;border-radius:4px;font-size:11.5px;display:none;z-index:30;white-space:nowrap}
+  #hud{position:absolute;left:10px;bottom:10px;color:var(--dimmer);font-size:10.5px;
+    background:#05090eb0;padding:4px 8px;border-radius:4px;pointer-events:none}
+  #legend{position:absolute;right:10px;bottom:10px;background:#05090eb0;padding:7px 9px;
+    border-radius:4px;font-size:10.5px;pointer-events:none;color:var(--dim);max-width:210px}
+  #legend b{color:var(--fg);font-weight:400}
+
+  .kv{display:grid;grid-template-columns:76px 1fr;gap:2px 8px;font-size:11.5px;margin-bottom:9px}
+  .kv b{color:var(--dim);font-weight:400}
+  .kv span{word-break:break-all}
+  .nb{margin:8px 0 0}
+  .nb h3{font-size:10px;letter-spacing:.12em;color:var(--dim);margin:9px 0 3px;text-transform:uppercase}
+  .nb a{display:flex;gap:7px;align-items:center;color:var(--fg);text-decoration:none;padding:1.5px 0;
+    cursor:pointer;font-size:11.5px}
+  .nb a:hover{color:var(--accent)}
+  .nb a .t{margin-left:auto;color:var(--dimmer);font-size:10px}
+  .tier{border-left:2px solid var(--line);padding-left:9px;margin:8px 0}
+  .tier.t1{border-color:var(--bad)} .tier.t2{border-color:var(--warn)} .tier.t3{border-color:var(--dimmer)}
+  .tier b{display:block;font-weight:400;color:var(--fg);font-size:11.5px}
+  .tier em{font-style:normal;color:var(--dim);font-size:10.5px}
+  .names{color:var(--dim);font-size:10.5px;margin-top:4px;line-height:1.6;word-break:break-all}
+  .warnbox{background:#2a1d0f;border:1px solid #5a3d17;color:#ffc880;padding:7px 9px;
+    border-radius:4px;font-size:10.5px;line-height:1.5;margin-top:9px}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="side">
+    <h1>ALPHAPLUS</h1>
+    <div class="sub" id="hdr"></div>
+
+    <section>
+      <h2>Find <span class="car">▾</span></h2>
+      <div class="body">
+        <div id="search">
+          <input type="text" id="q" placeholder="member name…" autocomplete="off" spellcheck="false">
+          <div id="hits"></div>
+        </div>
+        <div class="btns" style="margin-top:7px">
+          <button id="fit">Fit</button>
+          <button id="clear">Clear</button>
+        </div>
+        <div class="mini" style="margin:8px 0 3px">arrangement</div>
+        <select id="layoutSel" style="width:100%">
+          <option value="atlas">islands by subsystem</option>
+          <option value="library">islands by library</option>
+          <option value="layered">layered: tier down, library across</option>
+          <option value="force">force directed</option>
+        </select>
+        <p class="mini" id="layoutNote"></p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Libraries <span class="car">▾</span></h2>
+      <div class="body" id="libs"></div>
+      <p class="mini">The source library a member was extracted from — the
+      directory holding its source physical file. Not the object library a CALL
+      names at run time; those are different namespaces.</p>
+    </section>
+
+    <section>
+      <h2>Flow layers <span class="car">▾</span></h2>
+      <div class="body" id="tiers"></div>
+      <p class="mini"><b>tier</b> is what kind of thing a member is, from its
+      type and how much depends on it. <b>depth</b> is CALL hops from the
+      nearest menu option. Depth <i>unreached</i> is not dead code: nothing in
+      the source says what runs a program overnight.</p>
+    </section>
+
+    <section>
+      <h2>Mode <span class="car">▾</span></h2>
+      <div class="body">
+        <div class="btns">
+          <button class="mode on" data-mode="explore">Explore</button>
+          <button class="mode" data-mode="focus">Focus</button>
+          <button class="mode" data-mode="blast">Blast radius</button>
+        </div>
+        <div id="modeOpts" class="mini"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Edge layers <span class="car">▾</span></h2>
+      <div class="body" id="layers"></div>
+      <p class="mini">Message and data-area edges are off by default: 70 message
+      ids and 2 data areas are shared by thousands of members, so they connect
+      everything to everything and mean nothing.</p>
+    </section>
+
+    <section>
+      <h2>Member types <span class="car">▾</span></h2>
+      <div class="body" id="types"></div>
+    </section>
+
+    <section>
+      <h2>Hubs <span class="car">▾</span></h2>
+      <div class="body">
+        <label class="row"><input type="checkbox" id="hubHide"> hide hubs</label>
+        <label class="row"><input type="checkbox" id="hubMark" checked> ring the hubs</label>
+        <div style="margin-top:7px">
+          <div class="mini" style="margin:0 0 3px">in-degree cut: <b id="hubVal"></b>
+            — <span id="hubN"></span> nodes</div>
+          <input type="range" id="hubCut" min="5" max="400" step="5">
+        </div>
+        <p class="mini">A hub is a destination, not a corridor. The top 1% of
+        touched members carry ~40% of all edges; walking <i>through</i> them is
+        what turns a blast radius into “the whole application”.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Draw <span class="car">▾</span></h2>
+      <div class="body">
+        <label class="row"><input type="checkbox" id="showIslands" checked> group backdrop</label>
+        <label class="row"><input type="checkbox" id="showEdges" checked> edges</label>
+        <label class="row"><input type="checkbox" id="showLabels" checked> labels when zoomed</label>
+        <div class="mini" style="margin-top:7px">edge opacity</div>
+        <input type="range" id="alpha" min="2" max="60" value="7">
+      </div>
+    </section>
+
+    <section class="shut">
+      <h2>What is missing <span class="car">▸</span></h2>
+      <div class="body" id="gaps"></div>
+    </section>
+  </div>
+
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="tip"></div>
+    <div id="hud"></div>
+    <div id="legend"></div>
+  </div>
+
+  <div class="side" id="detail"></div>
+</div>
+
+<script id="data" type="application/json">__GRAPH_DATA__</script>
+<script>
+"use strict";
+const G = JSON.parse(document.getElementById('data').textContent);
+
+/* ---------------------------------------------------------------------------
+   Palette
+--------------------------------------------------------------------------- */
+const TYPE_COLOR = {
+  PF:'#4ea1ff', LF:'#7fc4ff', DATAFILE:'#1b5e9c', SQL:'#2d7fd3',
+  CBL:'#ffb454', CBLLE:'#ffa033', SQLCBLLE:'#e8862a',
+  CLP:'#5fd08a', CLLE:'#3fbb72',
+  RPG:'#ff7a8a', RPGLE:'#ff6478', SQLRPGLE:'#e04c62',
+  CPY:'#c58cff',
+  DSPF:'#4fd6d0', PRTF:'#36bdb8', MNUDDS:'#2aa39f',
+  CMD:'#9aa7b8', MNUCMD:'#8593a6', BND:'#6f7d90',
+  MSGF:'#6f7d90', MSGID:'#5c6878', DTAARA:'#5c6878', '?':'#ff4d4d'
+};
+const LAYER_COLOR = {
+  call:'#ffb454', copy:'#c58cff', file:'#4ea1ff', override:'#ff6b9d',
+  format:'#4fd6d0', based_on:'#7fc4ff', sqlalias:'#2d7fd3',
+  message:'#4a5563', dtaara:'#4a5563'
+};
+const colorOf = i => TYPE_COLOR[G.typeTable[G.ty[i]]] || '#8593a6';
+
+/* ---------------------------------------------------------------------------
+   Flatten every layer into one edge list, then build CSR both ways.
+   132k edges: doing this once beats doing it per interaction.
+--------------------------------------------------------------------------- */
+const N = G.n;
+let E = 0;
+for (const L of G.layers) E += L.pairs.length / 2;
+
+const eSrc = new Int32Array(E), eDst = new Int32Array(E);
+const eLay = new Uint8Array(E), eAttr = new Uint8Array(E), eConf = new Uint8Array(E);
+{
+  let k = 0;
+  G.layers.forEach((L, li) => {
+    const at = L.attr, cf = L.conf;
+    const nAt = typeof at === 'number', nCf = typeof cf === 'number';
+    L.e0 = k;                              // edges are contiguous per layer,
+    for (let j = 0; j < L.pairs.length; j += 2, k++) {   // so the renderer can
+      eSrc[k] = L.pairs[j]; eDst[k] = L.pairs[j+1];      // walk one range
+      eLay[k] = li;                                      // instead of scanning
+      eAttr[k] = nAt ? at : at[j/2];                     // all 132k nine times
+      eConf[k] = nCf ? cf : cf[j/2];                     // a frame
+    }
+    L.e1 = k;
+    L.count = L.pairs.length / 2;
+    L.pairs = null;                        // reclaim; eSrc/eDst hold it now
+  });
+}
+
+function csr(keys){
+  const off = new Int32Array(N + 1);
+  for (let i = 0; i < E; i++) off[keys[i] + 1]++;
+  for (let i = 0; i < N; i++) off[i+1] += off[i];
+  const cur = off.slice(0, N), idx = new Int32Array(E);
+  for (let i = 0; i < E; i++) idx[cur[keys[i]]++] = i;
+  return {off, idx};
+}
+const OUT = csr(eSrc), IN = csr(eDst);
+const layerOn = G.layers.map(L => L.structural);
+const FILE_LAYER = G.layers.findIndex(L => L.key === 'file');
+const COPY_LAYER = G.layers.findIndex(L => L.key === 'copy');
+const BASED_LAYER = G.layers.findIndex(L => L.key === 'based_on');
+const WRITE_ATTRS = new Set([1, 2]);        // file layer attrs: I U O unknown -> U,O
+
+/* ---------------------------------------------------------------------------
+   State
+--------------------------------------------------------------------------- */
+const S = {
+  layout: 'atlas',
+  pos: null,
+  mode: 'explore',
+  sel: -1, hover: -1,
+  focusHops: 2,
+  hubCut: G.hubCut,
+  hubHide: false, hubMark: true,
+  islands: true, edges: true, labels: true, alpha: 7,
+  typeOn: new Set(G.typeTable),
+  libOn: new Set(G.libTable || []),
+  tierOn: new Set(G.tierTable || []),
+  hi: null,          // Uint8Array highlight mask, or null
+  cam: {s: 1, x: 0, y: 0}
+};
+S.pos = Float32Array.from(G.atlas);
+const hasForce = G.force && G.force.length === N * 2;
+
+const visible = new Uint8Array(N);
+const LIB_T  = G.libTable  || [];
+const TIER_T = G.tierTable || [];
+function refreshVisible(){
+  for (let i = 0; i < N; i++){
+    visible[i] = (S.typeOn.has(G.typeTable[G.ty[i]]) &&
+                  (!LIB_T.length  || S.libOn.has(LIB_T[G.lib[i]])) &&
+                  (!TIER_T.length || S.tierOn.has(TIER_T[G.tier[i]])) &&
+                  !(S.hubHide && G.tin[i] >= S.hubCut)) ? 1 : 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Canvas
+--------------------------------------------------------------------------- */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d', {alpha:false});
+const stage = document.getElementById('stage');
+let W = 0, H = 0, DPR = 1;
+
+function resize(){
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = stage.clientWidth; H = stage.clientHeight;
+  cv.width = W * DPR; cv.height = H * DPR;
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  draw();
+}
+const sx = wx => wx * S.cam.s + S.cam.x;
+const sy = wy => wy * S.cam.s + S.cam.y;
+
+function fit(nodes){
+  let x0 = 1e18, y0 = 1e18, x1 = -1e18, y1 = -1e18, any = false;
+  const test = nodes || null;
+  for (let i = 0; i < N; i++){
+    if (test ? !test[i] : !visible[i]) continue;
+    any = true;
+    const x = S.pos[2*i], y = S.pos[2*i+1];
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  if (!any) return;
+  const pad = 60;
+  const s = Math.min((W - pad*2) / Math.max(1, x1-x0), (H - pad*2) / Math.max(1, y1-y0));
+  S.cam.s = Math.min(40, Math.max(0.02, s));
+  S.cam.x = W/2 - (x0+x1)/2 * S.cam.s;
+  S.cam.y = H/2 - (y0+y1)/2 * S.cam.s;
+  draw();
+}
+
+/* -- spatial grid for hit testing ---------------------------------------- */
+let grid = null;
+function buildGrid(){
+  let x0=1e18,y0=1e18,x1=-1e18,y1=-1e18;
+  for (let i=0;i<N;i++){const x=S.pos[2*i],y=S.pos[2*i+1];
+    if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;}
+  const cols = 220, rows = 220;
+  const cw = Math.max(1e-6,(x1-x0)/cols), ch = Math.max(1e-6,(y1-y0)/rows);
+  const cells = new Map();
+  for (let i=0;i<N;i++){
+    const c = Math.min(cols-1, Math.floor((S.pos[2*i]-x0)/cw));
+    const r = Math.min(rows-1, Math.floor((S.pos[2*i+1]-y0)/ch));
+    const k = r*cols+c;
+    let a = cells.get(k); if(!a){a=[];cells.set(k,a);} a.push(i);
+  }
+  grid = {x0,y0,cw,ch,cols,rows,cells};
+}
+function pick(px, py){
+  if (!grid) buildGrid();
+  const wx = (px - S.cam.x)/S.cam.s, wy = (py - S.cam.y)/S.cam.s;
+  const reach = 9 / S.cam.s;
+  const c0 = Math.floor((wx-reach-grid.x0)/grid.cw), c1 = Math.floor((wx+reach-grid.x0)/grid.cw);
+  const r0 = Math.floor((wy-reach-grid.y0)/grid.ch), r1 = Math.floor((wy+reach-grid.y0)/grid.ch);
+  let best = -1, bd = reach*reach;
+  for (let r=r0;r<=r1;r++) for (let c=c0;c<=c1;c++){
+    const a = grid.cells.get(r*grid.cols+c); if(!a) continue;
+    for (const i of a){
+      if (!visible[i]) continue;
+      const dx = S.pos[2*i]-wx, dy = S.pos[2*i+1]-wy, d = dx*dx+dy*dy;
+      if (d < bd){bd = d; best = i;}
+    }
+  }
+  return best;
+}
+
+/* ---------------------------------------------------------------------------
+   Draw
+--------------------------------------------------------------------------- */
+let pending = false, interacting = false;
+function draw(){ if(!pending){ pending = true; requestAnimationFrame(render); } }
+
+function nodeRadius(i){
+  return Math.min(7, 0.9 + Math.sqrt(G.deg[i]) * 0.34);
+}
+
+function render(){
+  pending = false;
+  ctx.fillStyle = '#0d1117'; ctx.fillRect(0,0,W,H);
+  const s = S.cam.s;
+
+  // -- islands, behind everything.  Which set depends on how it is grouped.
+  const islandSet = S.layout === 'atlas' ? G.islands
+                  : S.layout === 'library' ? (G.libIslands || [])
+                  : null;
+  if (S.islands && islandSet){
+    ctx.lineWidth = 1;
+    for (const is of islandSet){
+      const x = sx(is.x), y = sy(is.y), r = is.r * s;
+      if (x + r < 0 || x - r > W || y + r < 0 || y - r > H || r < 2) continue;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832);
+      ctx.fillStyle = 'rgba(255,255,255,.022)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.stroke();
+    }
+  }
+
+  // -- the layered grid: a band per tier, a lane per library.
+  //
+  // Drawn as alternating stripes rather than lines, because six labelled
+  // gridlines over 13,000 dots reads as noise and the point of the view is
+  // that the bands are regions you can aim at.
+  if (S.islands && S.layout === 'layered' && G.bands){
+    const lanes = G.lanes || [];
+    G.bands.forEach((b, n) => {
+      const y0 = sy(b.y0 - 6), y1 = sy(b.y1 + 6);
+      if (y1 < 0 || y0 > H) return;
+      ctx.fillStyle = n % 2 ? 'rgba(255,255,255,.016)'
+                            : 'rgba(255,255,255,.038)';
+      ctx.fillRect(0, y0, W, y1 - y0);
+    });
+    ctx.strokeStyle = 'rgba(255,255,255,.05)';
+    ctx.lineWidth = 1;
+    for (const l of lanes){
+      const x = sx(l.x1 + 20);
+      if (x < 0 || x > W) continue;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    }
+  }
+
+  // -- edges, batched one path per layer
+  let drawn = 0;
+  if (S.edges){
+    const stride = (interacting && E > 45000) ? 3 : 1;
+    ctx.lineWidth = Math.min(1.6, Math.max(.35, s * .5));
+    for (let li = 0; li < G.layers.length; li++){
+      if (!layerOn[li]) continue;
+      ctx.beginPath();
+      let n = 0;
+      const L = G.layers[li];
+      for (let e = L.e0; e < L.e1; e += stride){
+        const a = eSrc[e], b = eDst[e];
+        if (!visible[a] || !visible[b]) continue;
+        if (S.hi && !(S.hi[a] && S.hi[b])) continue;
+        const ax = sx(S.pos[2*a]), ay = sy(S.pos[2*a+1]);
+        const bx = sx(S.pos[2*b]), by = sy(S.pos[2*b+1]);
+        if ((ax<0&&bx<0)||(ax>W&&bx>W)||(ay<0&&by<0)||(ay>H&&by>H)) continue;
+        ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+        n++;
+      }
+      if (n){
+        ctx.globalAlpha = Math.min(.9, (S.alpha/100) * (S.hi ? 3.2 : 1));
+        ctx.strokeStyle = LAYER_COLOR[G.layers[li].key];
+        ctx.stroke();
+        drawn += n;
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // -- nodes
+  const byColor = new Map();
+  for (let i = 0; i < N; i++){
+    if (!visible[i]) continue;
+    const x = sx(S.pos[2*i]), y = sy(S.pos[2*i+1]);
+    if (x < -8 || x > W+8 || y < -8 || y > H+8) continue;
+    if (S.hi && !S.hi[i]) continue;
+    const c = colorOf(i);
+    let a = byColor.get(c); if (!a){a = []; byColor.set(c, a);}
+    a.push(x, y, nodeRadius(i));
+  }
+  for (const [c, a] of byColor){
+    ctx.fillStyle = c; ctx.beginPath();
+    for (let j = 0; j < a.length; j += 3){
+      ctx.moveTo(a[j] + a[j+2], a[j+1]);
+      ctx.arc(a[j], a[j+1], a[j+2], 0, 6.2832);
+    }
+    ctx.fill();
+  }
+
+  // -- hub rings
+  if (S.hubMark){
+    ctx.strokeStyle = 'rgba(255,180,84,.55)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++){
+      if (!visible[i] || G.tin[i] < S.hubCut) continue;
+      if (S.hi && !S.hi[i]) continue;
+      const x = sx(S.pos[2*i]), y = sy(S.pos[2*i+1]);
+      if (x<-12||x>W+12||y<-12||y>H+12) continue;
+      const r = nodeRadius(i) + 2.5;
+      ctx.moveTo(x+r, y); ctx.arc(x, y, r, 0, 6.2832);
+    }
+    ctx.stroke();
+  }
+
+  // -- labels
+  if (S.labels && s > 1.6){
+    ctx.font = '10px ui-monospace,monospace'; ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(215,224,234,.82)';
+    let budget = 700;
+    for (let i = 0; i < N && budget > 0; i++){
+      if (!visible[i]) continue;
+      if (S.hi && !S.hi[i]) continue;
+      if (s < 4 && G.deg[i] < 12) continue;
+      const x = sx(S.pos[2*i]), y = sy(S.pos[2*i+1]);
+      if (x<0||x>W||y<0||y>H) continue;
+      ctx.fillText(G.name[i], x, y - nodeRadius(i) - 3);
+      budget--;
+    }
+  }
+
+  // -- group names last, or 97,000 edges are drawn on top of them
+  if (S.islands && islandSet){
+    ctx.textAlign = 'center';
+    for (const is of islandSet){
+      const x = sx(is.x), y = sy(is.y), r = is.r * s;
+      if (r < 20 || x + r < 0 || x - r > W || y + r < 0 || y - r > H) continue;
+      const size = Math.min(17, Math.max(9, r / 4.5));
+      ctx.font = size + 'px ui-monospace,monospace';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(6,10,16,.85)';
+      ctx.strokeText(is.name, x, y - r - 3);
+      ctx.fillStyle = 'rgba(196,212,230,.9)';
+      ctx.fillText(is.name, x, y - r - 3);
+    }
+  }
+
+  // -- band and lane names, pinned to the edges of the viewport so they stay
+  // readable at any zoom.  A label you have to hunt for is not a label.
+  if (S.islands && S.layout === 'layered' && G.bands){
+    ctx.textAlign = 'left';
+    ctx.font = '11px ui-monospace,monospace';
+    for (const b of G.bands){
+      const y = sy((b.y0 + b.y1) / 2);
+      if (y < -10 || y > H + 10) continue;
+      const text = `${b.name}  ${b.n.toLocaleString()}`;
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(6,10,16,.9)';
+      ctx.strokeText(text, 8, y);
+      ctx.fillStyle = 'rgba(196,212,230,.75)';
+      ctx.fillText(text, 8, y);
+    }
+    ctx.textAlign = 'center';
+    for (const l of (G.lanes || [])){
+      const x = sx((l.x0 + l.x1) / 2);
+      if (x < 0 || x > W) continue;
+      const text = `${l.name}  ${l.n.toLocaleString()}`;
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(6,10,16,.9)';
+      ctx.strokeText(text, x, 14);
+      ctx.fillStyle = 'rgba(196,212,230,.85)';
+      ctx.fillText(text, x, 14);
+    }
+  }
+
+  // -- selection
+  if (S.sel >= 0){
+    const x = sx(S.pos[2*S.sel]), y = sy(S.pos[2*S.sel+1]);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x, y, nodeRadius(S.sel) + 6, 0, 6.2832); ctx.stroke();
+    ctx.font = '12px ui-monospace,monospace'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff'; ctx.fillText(G.name[S.sel], x, y - nodeRadius(S.sel) - 10);
+  }
+
+  let shown = 0; for (let i=0;i<N;i++) if (visible[i] && (!S.hi || S.hi[i])) shown++;
+  document.getElementById('hud').textContent =
+    `${shown.toLocaleString()} / ${N.toLocaleString()} members · ` +
+    `${drawn.toLocaleString()} edges drawn · ${(s).toFixed(2)}×`;
+}
+
+/* ---------------------------------------------------------------------------
+   Interaction
+--------------------------------------------------------------------------- */
+let dragging = false, moved = false, lx = 0, ly = 0, settle = null;
+cv.addEventListener('mousedown', e => {dragging = true; moved = false; lx = e.clientX; ly = e.clientY; cv.classList.add('drag');});
+window.addEventListener('mouseup', () => {
+  dragging = false; cv.classList.remove('drag');
+  if (interacting){ interacting = false; draw(); }
+});
+window.addEventListener('mousemove', e => {
+  const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  if (dragging){
+    moved = true; interacting = true;
+    S.cam.x += e.clientX - lx; S.cam.y += e.clientY - ly;
+    lx = e.clientX; ly = e.clientY; draw();
+    return;
+  }
+  if (px < 0 || py < 0 || px > W || py > H){ hideTip(); return; }
+  const i = pick(px, py);
+  if (i !== S.hover){ S.hover = i; i >= 0 ? showTip(i, px, py) : hideTip(); }
+  else if (i >= 0) moveTip(px, py);
+});
+cv.addEventListener('click', e => {
+  if (moved) return;
+  const r = cv.getBoundingClientRect();
+  const i = pick(e.clientX - r.left, e.clientY - r.top);
+  select(i);
+});
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  const k = Math.exp(-e.deltaY * 0.0013);
+  const ns = Math.min(60, Math.max(0.02, S.cam.s * k));
+  S.cam.x = px - (px - S.cam.x) * (ns / S.cam.s);
+  S.cam.y = py - (py - S.cam.y) * (ns / S.cam.s);
+  S.cam.s = ns;
+  interacting = true;
+  clearTimeout(settle);
+  settle = setTimeout(() => {interacting = false; draw();}, 130);
+  draw();
+}, {passive:false});
+
+const tip = document.getElementById('tip');
+function showTip(i, px, py){
+  const t = G.typeTable[G.ty[i]] + (G.also[i] ? '+' + G.also[i] : '');
+  const hub = G.tin[i] >= S.hubCut ? ' · HUB' : '';
+  tip.innerHTML = `<b>${G.name[i]}</b> <span style="color:${colorOf(i)}">${t}</span>` +
+    `<br><span style="color:#7d8b9c">${G.subTable[G.sub[i]] || '—'} · ` +
+    `${G.ln[i].toLocaleString()} lines · ${G.tin[i]} depend on it${hub}</span>`;
+  tip.style.display = 'block'; moveTip(px, py);
+}
+function moveTip(px, py){
+  tip.style.left = Math.min(W - 240, px + 14) + 'px';
+  tip.style.top = (py + 16) + 'px';
+}
+function hideTip(){ tip.style.display = 'none'; S.hover = -1; }
+
+/* ---------------------------------------------------------------------------
+   Neighbours
+--------------------------------------------------------------------------- */
+function neighbours(i){
+  const out = [];
+  for (let k = OUT.off[i]; k < OUT.off[i+1]; k++){
+    const e = OUT.idx[k];
+    out.push({e, other: eDst[e], dir: 'out', layer: eLay[e]});
+  }
+  for (let k = IN.off[i]; k < IN.off[i+1]; k++){
+    const e = IN.idx[k];
+    out.push({e, other: eSrc[e], dir: 'in', layer: eLay[e]});
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------------------------
+   Impact.  The rules, in one place:
+     - "affects" is the reverse of most edges: change the callee and the
+       caller is affected, change the copybook and the copier is affected.
+     - the one forward edge is a program writing a file: change the program
+       and the file's contents change, so everyone reading it is affected.
+     - a hub is a destination, not a corridor: emit it, never expand through it.
+     - a member that writes nothing downstream is a leaf.
+--------------------------------------------------------------------------- */
+function affects(i){
+  const res = [];
+  for (let k = IN.off[i]; k < IN.off[i+1]; k++){        // things that depend on i
+    const e = IN.idx[k];
+    if (!layerOn[eLay[e]]) continue;
+    res.push(eSrc[e]);
+  }
+  for (let k = OUT.off[i]; k < OUT.off[i+1]; k++){      // files i writes
+    const e = OUT.idx[k];
+    if (eLay[e] !== FILE_LAYER || !WRITE_ATTRS.has(eAttr[e])) continue;
+    res.push(eDst[e]);
+  }
+  return res;
+}
+
+function recompileClosure(seed){
+  // Transitive COPY closure plus logicals built over it.  This one is exact
+  // and must be complete - it is what will not compile otherwise.
+  const seen = new Set(), out = [];
+  let frontier = [seed];
+  for (let hop = 0; hop < 8 && frontier.length; hop++){
+    const next = [];
+    for (const n of frontier){
+      for (let k = IN.off[n]; k < IN.off[n+1]; k++){
+        const e = IN.idx[k];
+        if (eLay[e] !== COPY_LAYER && eLay[e] !== BASED_LAYER) continue;
+        const p = eSrc[e];
+        if (seen.has(p)) continue;
+        seen.add(p); out.push(p); next.push(p);
+      }
+    }
+    frontier = next;
+  }
+  return out;
+}
+
+//: Stop enumerating Tier 2 past this many members and say so.  A list of
+//: 4,000 names is not an impact analysis, and pretending otherwise is the
+//: failure mode this whole view exists to show.
+const T2_BUDGET = 1200;
+
+function blastRadius(seed, maxHop, useHubCut){
+  const t1 = recompileClosure(seed);
+  const seen = new Set([seed]);
+  t1.forEach(n => seen.add(n));
+  const t2 = [], t3 = new Set(), perHop = [];
+  let truncated = 0;
+
+  // Tier 1 deliberately does NOT propagate.  Adding a field to a record
+  // layout forces 67 programs to recompile; it does not make any of them
+  // behave differently, and expanding from all of them re-creates exactly the
+  // saturation the hub cut just removed.  Whether a Tier 1 member changes
+  // behaviour is not knowable from the graph - it is knowable only after
+  // someone edits it, which is why the answer is to run this again from each
+  // member actually edited rather than to guess three hops ahead.
+  let frontier = [seed];
+
+  for (let hop = 0; hop < maxHop && frontier.length; hop++){
+    const next = [];
+    for (const n of frontier){
+      for (const p of affects(n)){
+        if (seen.has(p)) continue;
+        if (useHubCut && G.tin[p] >= S.hubCut){ t3.add(p); continue; }
+        seen.add(p);
+        if (useHubCut && t2.length >= T2_BUDGET){ truncated++; continue; }
+        t2.push(p); next.push(p);
+      }
+    }
+    perHop.push(next.length);
+    frontier = next;
+  }
+  return {t1, t2, t3: [...t3], perHop, truncated};
+}
+
+function nHops(seed, hops){
+  const mask = new Uint8Array(N); mask[seed] = 1;
+  let frontier = [seed];
+  for (let h = 0; h < hops && frontier.length; h++){
+    const next = [];
+    for (const n of frontier) for (const {other, layer} of neighbours(n)){
+      if (!layerOn[layer] || mask[other]) continue;
+      mask[other] = 1; next.push(other);
+    }
+    frontier = next;
+  }
+  return mask;
+}
+
+/* ---------------------------------------------------------------------------
+   Detail panel
+--------------------------------------------------------------------------- */
+const detail = document.getElementById('detail');
+const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+function link(i){
+  return `<a data-go="${i}"><span class="sw" style="background:${colorOf(i)}"></span>` +
+         `${esc(G.name[i])}<span class="t">${esc(G.typeTable[G.ty[i]])}</span></a>`;
+}
+function nameList(arr, cap){
+  const shown = arr.slice(0, cap).map(i => esc(G.name[i])).join(', ');
+  return shown + (arr.length > cap ? ` … +${arr.length - cap} more` : '');
+}
+
+function select(i){
+  S.sel = i;
+  if (i < 0){ S.hi = null; detail.classList.remove('on'); refreshVisible(); draw(); return; }
+  detail.classList.add('on');
+
+  if (S.mode === 'focus') S.hi = nHops(i, S.focusHops);
+  else if (S.mode === 'blast'){
+    const b = blastRadius(i, 3, true);
+    S.hi = new Uint8Array(N); S.hi[i] = 1;
+    b.t1.forEach(n => S.hi[n] = 1); b.t2.forEach(n => S.hi[n] = 1);
+  } else S.hi = null;
+
+  renderDetail(i);
+  draw();
+  if (S.mode !== 'explore') fit(S.hi);
+}
+
+function renderDetail(i){
+  const t = G.typeTable[G.ty[i]] + (G.also[i] ? ' + ' + G.also[i] : '');
+  let h = `<section><h2>Member <span class="car" data-x="1">✕</span></h2>
+    <div style="font-size:15px;margin:2px 0 9px">${esc(G.name[i])}</div>
+    <div class="kv">
+      <b>type</b><span style="color:${colorOf(i)}">${esc(t)}</span>
+      ${LIB_T.length ? `<b>library</b><span>${esc(LIB_T[G.lib[i]] || '—')}</span>` : ''}
+      <b>subsystem</b><span>${esc(G.subTable[G.sub[i]] || '—')}</span>
+      ${TIER_T.length ? `<b>tier</b><span style="color:${TIER_COLOR[TIER_T[G.tier[i]]] || '#8593a6'}">${esc(TIER_T[G.tier[i]] || '—')}</span>` : ''}
+      ${G.depth ? `<b>depth</b><span>${G.depth[i] < 0
+          ? '<span title="No menu option or CALL chain in the source reaches it. That is not the same as dead - the job scheduler is not in the source.">unreached</span>'
+          : G.depth[i] + ' hop(s) from a menu'}</span>` : ''}
+      <b>lines</b><span>${G.ln[i].toLocaleString()}</span>
+      <b>depended on</b><span>${G.tin[i]} ${G.tin[i] >= S.hubCut ? '<b style="color:#ffb454">HUB</b>' : ''}</span>
+      <b>total edges</b><span>${G.deg[i]}</span>
+      ${G.alias[i] ? `<b>SQL name</b><span>${esc(G.alias[i])}</span>` : ''}
+      <b>path</b><span>${esc(G.path[i] || '—')}</span>
+    </div>`;
+
+  // A written description, when one exists. Labelled as generated, because it
+  // is: the facts above are read from source and this was not.
+  const note = G.notes && G.notes[i];
+  if (note) h += `<div class="warnbox" style="border-color:#2a3f55">
+    <div class="mini" style="margin:0 0 4px">written description — generated,
+    and may be wrong. The facts above are read from source.</div>
+    ${esc(note)}</div>`;
+
+  if (G.alias[i]) h += `<div class="warnbox">This SQL member declares
+    <b>FOR SYSTEM NAME ${esc(G.alias[i])}</b>, which is not a member in the
+    source tree. The index stores it in <code>object.based_on</code>, the same
+    column it uses for an LF's parent — so it is an alias recorded as if it
+    were a parent. Treat it as unresolved.</div>`;
+
+  h += `</section>`;
+
+  // grouped neighbours
+  const groups = new Map();
+  for (const {other, dir, layer, e} of neighbours(i)){
+    const L = G.layers[layer];
+    const key = dir === 'out' ? `${L.label} — ${L.verb}` : `${L.label} — reverse`;
+    let a = groups.get(key); if (!a){a = []; groups.set(key, a);}
+    a.push(other);
+  }
+  h += `<section><h2>Connections <span class="car">▾</span></h2><div class="body nb">`;
+  if (!groups.size) h += `<p class="mini">Nothing connects to it in any layer.
+    That may mean it is dead, or that the job scheduler starts it — the
+    scheduler is not in the source and is a permanent blind spot.</p>`;
+  for (const [key, arr] of [...groups].sort((a,b) => b[1].length - a[1].length)){
+    const uniq = [...new Set(arr)];
+    h += `<h3>${esc(key)} <span style="color:#4d5867">${uniq.length}</span></h3>`;
+    h += uniq.slice(0, 40).map(link).join('');
+    if (uniq.length > 40) h += `<div class="mini">+${uniq.length - 40} more</div>`;
+  }
+  h += `</div></section>`;
+
+  // Blast radius.  The damped figure moves with the hub slider so it is
+  // recomputed; the undamped one does not depend on the cut, and walking five
+  // undamped hops reaches most of the graph, so it is computed once and kept.
+  const damped = blastRadius(i, 3, true);
+  if (!renderDetail.naive) renderDetail.naive = new Map();
+  if (!renderDetail.naive.has(i)) renderDetail.naive.set(i, blastRadius(i, 5, false));
+  const naive = renderDetail.naive.get(i);
+  h += `<section><h2>Blast radius <span class="car">▾</span></h2><div class="body">
+    <div class="tier t1"><b>Tier 1 — must recompile · ${damped.t1.length}</b>
+      <em>transitive COPY closure and logicals. Exact; this is what breaks the
+      build. It is not a behaviour claim — recompiling is not changing.</em>
+      ${damped.t1.length ? `<div class="names">${nameList(damped.t1, 30)}</div>` : ''}</div>
+    <div class="tier t2"><b>Tier 2 — must review · ${damped.t2.length}${damped.truncated ? '+' : ''}</b>
+      <em>reachable in ≤3 hops without walking through a hub. Per hop:
+      ${damped.perHop.join(' → ')}</em>
+      ${damped.truncated ? `<div class="warnbox">Stopped at ${T2_BUDGET}.
+        ${damped.truncated.toLocaleString()} further members were reached and
+        are <b>not</b> listed. A seed this widely coupled needs narrowing by
+        field before the list means anything.</div>` : ''}
+      ${damped.t2.length ? `<div class="names">${nameList(damped.t2, 30)}</div>` : ''}</div>
+    <div class="tier t3"><b>Tier 3 — notify only · ${damped.t3.length}</b>
+      <em>reached only via a hub. Counted, not traversed.</em></div>
+    <p class="mini">Same walk with no hub cut and 5 hops:
+      <b style="color:#ff5c5c">${naive.t2.length.toLocaleString()}</b> members
+      (${(100*naive.t2.length/N).toFixed(0)}% of the codebase) — per hop
+      ${naive.perHop.join(' → ')}.
+      ${naive.t2.length > damped.t2.length * 2
+        ? 'That is the number that means nothing.'
+        : 'This member is not widely coupled, so the damping changes little here.'}</p>
+    <p class="mini" style="margin-top:7px;color:#7d8b9c">Tier 1 is not expanded.
+      Run this again from each member you actually edit — what propagates out of
+      it depends on the edit, which does not exist until you make it.</p>
+  </div></section>`;
+
+  detail.innerHTML = h;
+}
+
+detail.addEventListener('click', e => {
+  const go = e.target.closest('[data-go]');
+  if (go){ const i = +go.dataset.go; select(i); centre(i); return; }
+  if (e.target.dataset.x){ select(-1); return; }
+  const h2 = e.target.closest('h2');
+  if (h2) h2.parentElement.classList.toggle('shut');
+});
+function centre(i){
+  S.cam.x = W/2 - S.pos[2*i] * S.cam.s;
+  S.cam.y = H/2 - S.pos[2*i+1] * S.cam.s;
+  draw();
+}
+
+/* ---------------------------------------------------------------------------
+   Sidebar
+--------------------------------------------------------------------------- */
+document.getElementById('hdr').innerHTML =
+  `${N.toLocaleString()} members · ${E.toLocaleString()} edges<br>` +
+  `<span style="color:#4d5867">${esc(G.source)}<br>built ${esc(G.built)}</span>`;
+
+// -- layers
+const layersEl = document.getElementById('layers');
+layersEl.innerHTML = G.layers.map((L, i) =>
+  `<label class="row"><input type="checkbox" data-layer="${i}" ${L.structural?'checked':''}>
+   <span class="sw" style="background:${LAYER_COLOR[L.key]}"></span>${esc(L.label)}
+   <span class="ct">${L.count.toLocaleString()}</span></label>`).join('');
+layersEl.addEventListener('change', e => {
+  layerOn[+e.target.dataset.layer] = e.target.checked;
+  if (S.sel >= 0) select(S.sel); else draw();
+});
+
+// -- member types
+const counts = {};
+for (let i = 0; i < N; i++){ const t = G.typeTable[G.ty[i]]; counts[t] = (counts[t]||0)+1; }
+const typesEl = document.getElementById('types');
+typesEl.innerHTML = G.typeTable.filter(t => counts[t]).map(t =>
+  `<label class="row"><input type="checkbox" data-type="${t}" checked>
+   <span class="sw" style="background:${TYPE_COLOR[t]||'#8593a6'}"></span>${esc(t)}
+   <span class="ct">${counts[t].toLocaleString()}</span></label>`).join('') +
+  `<div class="btns" style="margin-top:7px">
+     <button id="tAll">All</button><button id="tNone">None</button>
+     <button id="tPgm">Programs</button><button id="tData">Data</button></div>`;
+typesEl.addEventListener('change', e => {
+  const t = e.target.dataset.type; if (!t) return;
+  e.target.checked ? S.typeOn.add(t) : S.typeOn.delete(t);
+  refreshVisible(); draw();
+});
+function setTypes(list){
+  S.typeOn = new Set(list);
+  typesEl.querySelectorAll('[data-type]').forEach(c => c.checked = S.typeOn.has(c.dataset.type));
+  refreshVisible(); draw();
+}
+typesEl.addEventListener('click', e => {
+  if (e.target.id === 'tAll')  setTypes(G.typeTable);
+  if (e.target.id === 'tNone') setTypes([]);
+  if (e.target.id === 'tPgm')  setTypes(['CBL','CBLLE','SQLCBLLE','CLP','CLLE','RPG','RPGLE','SQLRPGLE']);
+  if (e.target.id === 'tData') setTypes(['PF','LF','SQL','CPY']);
+});
+
+// -- hubs
+const hubCutEl = document.getElementById('hubCut');
+hubCutEl.value = S.hubCut;
+function hubLabel(){
+  let n = 0; for (let i=0;i<N;i++) if (G.tin[i] >= S.hubCut) n++;
+  document.getElementById('hubVal').textContent = S.hubCut;
+  document.getElementById('hubN').textContent = n + ' hubs';
+}
+hubLabel();
+hubCutEl.addEventListener('input', () => {
+  S.hubCut = +hubCutEl.value; hubLabel(); refreshVisible();
+  if (S.sel >= 0) renderDetail(S.sel);
+  draw();
+});
+document.getElementById('hubHide').addEventListener('change', e => {
+  S.hubHide = e.target.checked; refreshVisible(); draw();
+});
+document.getElementById('hubMark').addEventListener('change', e => {
+  S.hubMark = e.target.checked; draw();
+});
+
+// -- draw options
+const bind = (id, key, after) => document.getElementById(id).addEventListener(
+  id === 'alpha' ? 'input' : 'change', e => {
+    S[key] = id === 'alpha' ? +e.target.value : e.target.checked;
+    if (after) after();
+    draw();
+  });
+bind('showIslands','islands'); bind('showEdges','edges');
+bind('showLabels','labels');   bind('alpha','alpha');
+
+// -- modes
+const modeOpts = document.getElementById('modeOpts');
+function renderModeOpts(){
+  if (S.mode === 'focus') modeOpts.innerHTML =
+    `Show only what is within <b id="hv">${S.focusHops}</b> hop(s) of the selection,
+     along the enabled layers.<input type="range" id="hops" min="1" max="4" value="${S.focusHops}">`;
+  else if (S.mode === 'blast') modeOpts.innerHTML =
+    `Select a member to see Tier 1 / 2 / 3, hub-damped, and what the same
+     question looks like without the damping.`;
+  else modeOpts.innerHTML = `Click a member for its facts and its blast radius.`;
+  const h = document.getElementById('hops');
+  if (h) h.addEventListener('input', e => {
+    S.focusHops = +e.target.value;
+    document.getElementById('hv').textContent = S.focusHops;
+    if (S.sel >= 0) select(S.sel);
+  });
+}
+renderModeOpts();
+document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.mode').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); S.mode = b.dataset.mode; renderModeOpts();
+  if (S.sel >= 0) select(S.sel); else { S.hi = null; draw(); }
+}));
+
+// -- search
+const q = document.getElementById('q'), hits = document.getElementById('hits');
+q.addEventListener('input', () => {
+  const v = q.value.trim().toUpperCase();
+  if (!v){ hits.classList.remove('on'); return; }
+  const starts = [], has = [];
+  for (let i = 0; i < N && starts.length + has.length < 300; i++){
+    const n = G.name[i];
+    if (n.startsWith(v)) starts.push(i);
+    else if (n.includes(v)) has.push(i);
+  }
+  const list = starts.concat(has).slice(0, 40);
+  hits.innerHTML = list.map(i =>
+    `<div data-go="${i}"><span class="sw" style="background:${colorOf(i)}"></span>` +
+    `${esc(G.name[i])}<span class="t">${esc(G.typeTable[G.ty[i]])}</span></div>`).join('')
+    || `<div style="color:#4d5867">no member matches</div>`;
+  hits.classList.add('on');
+});
+hits.addEventListener('click', e => {
+  const d = e.target.closest('[data-go]'); if (!d) return;
+  const i = +d.dataset.go;
+  hits.classList.remove('on'); q.value = G.name[i];
+  select(i); S.cam.s = Math.max(S.cam.s, 6); centre(i);
+});
+q.addEventListener('keydown', e => {
+  if (e.key === 'Enter'){ const f = hits.querySelector('[data-go]'); if (f) f.click(); }
+  if (e.key === 'Escape'){ hits.classList.remove('on'); }
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('#search')) hits.classList.remove('on');
+});
+
+// -- buttons
+document.getElementById('fit').addEventListener('click', () => fit(S.hi));
+document.getElementById('clear').addEventListener('click', () => {
+  q.value = ''; select(-1); fit();
+});
+const LAYOUT_NOTE = {
+  atlas:   'One island per subsystem — a 3-character name prefix. Grouping ' +
+           'only; the prefix is never asserted as a fact.',
+  library: 'One island per source library, from the path the member was ' +
+           'extracted from.',
+  layered: 'Down the screen is how far a member sits from something a user ' +
+           'can start. Across is which library owns it. Follow a column ' +
+           'downwards to see one library’s whole stack.',
+  force:   'Springs on the structural edges. Pretty, and it puts the hubs in ' +
+           'the middle where they tell you least.',
+};
+const LAYOUT_XY = {atlas: 'atlas', library: 'library',
+                   layered: 'layered', force: 'force'};
+
+const layoutSel = document.getElementById('layoutSel');
+const layoutNote = document.getElementById('layoutNote');
+for (const opt of [...layoutSel.options]){
+  // An arrangement with no coordinates behind it cannot be offered. force is
+  // the usual absentee - it needs --force-layout and numpy.
+  const xy = G[LAYOUT_XY[opt.value]];
+  if (!xy || !xy.length){
+    opt.disabled = true;
+    opt.textContent += ' — not built';
+  }
+}
+function applyLayout(which){
+  const xy = G[LAYOUT_XY[which]];
+  if (!xy || !xy.length) return;
+  S.layout = which;
+  S.pos = Float32Array.from(xy);
+  layoutSel.value = which;
+  layoutNote.textContent = LAYOUT_NOTE[which] || '';
+  grid = null; fit(S.hi);
+}
+layoutSel.addEventListener('change', () => applyLayout(layoutSel.value));
+layoutNote.textContent = LAYOUT_NOTE.atlas;
+
+// -- library and flow-layer filters
+function buildFilter(elId, table, set, colour){
+  const el = document.getElementById(elId);
+  if (!table.length){ el.innerHTML = '<p class="mini">Not in this index.</p>';
+                      return; }
+  const tally = {};
+  for (let i = 0; i < N; i++){
+    const k = table[elId === 'libs' ? G.lib[i] : G.tier[i]];
+    tally[k] = (tally[k] || 0) + 1;
+  }
+  // An empty key is not "none". For a library it means the name was reached
+  // from code and never placed - a file in a library nobody extracted, or an
+  // object with no source member. Labelling that "(none)" reads as "these
+  // belong nowhere", when the truth is "we do not know where these live".
+  const blank = elId === 'libs' ? '(library not known)' : '(no tier)';
+  el.innerHTML = table.map(k =>
+    `<label class="row"><input type="checkbox" data-k="${esc(k)}" checked>
+     ${colour ? `<span class="sw" style="background:${colour(k)}"></span>` : ''}
+     ${esc(k || blank)}
+     <span class="ct">${(tally[k]||0).toLocaleString()}</span></label>`).join('')
+    + `<div class="btns" style="margin-top:7px">
+         <button data-all="1">All</button><button data-none="1">None</button>
+       </div>`;
+  el.addEventListener('change', e => {
+    const k = e.target.dataset.k; if (k === undefined) return;
+    e.target.checked ? set.add(k) : set.delete(k);
+    refreshVisible(); draw();
+  });
+  el.addEventListener('click', e => {
+    if (!e.target.dataset.all && !e.target.dataset.none) return;
+    const on = !!e.target.dataset.all;
+    set.clear(); if (on) table.forEach(k => set.add(k));
+    el.querySelectorAll('input').forEach(b => b.checked = on);
+    refreshVisible(); draw();
+  });
+}
+const TIER_COLOR = {entry:'#ffd166', driver:'#7bd88f', program:'#6cc6ff',
+                    service:'#c792ea', contract:'#f78c6c', data:'#8593a6',
+                    '':'#ff4d4d'};
+buildFilter('libs', LIB_T, S.libOn, null);
+buildFilter('tiers', TIER_T, S.tierOn, k => TIER_COLOR[k] || '#8593a6');
+
+// -- gaps
+document.getElementById('gaps').innerHTML = `
+  <p class="mini" style="margin-top:0">The map draws what the parsers proved.
+  These are the places it could not.</p>
+  <div class="kv" style="margin-top:8px">
+    <b>SQL aliases</b><span>${G.gaps.danglingAliasTotal} declare a
+      <code>FOR SYSTEM NAME</code> that is not a member here</span>
+    <b>call targets</b><span>${G.gaps.externalTotal} called but not in the source tree</span>
+    <b>scheduler</b><span>not in the source at all — a permanent blind spot</span>
+  </div>
+  <p class="mini">A member with no inbound edge is not proof it is dead.</p>`;
+
+// -- collapsible sections
+document.querySelectorAll('.side h2').forEach(h => h.addEventListener('click', () => {
+  const s = h.parentElement; s.classList.toggle('shut');
+  const c = h.querySelector('.car'); if (c) c.textContent = s.classList.contains('shut') ? '▸' : '▾';
+}));
+
+// -- legend
+document.getElementById('legend').innerHTML =
+  `<b>node</b> size = total edges · ring = hub<br>` +
+  `<b>drag</b> pan · <b>wheel</b> zoom · <b>click</b> select`;
+
+/* ---------------------------------------------------------------------------
+   Go
+--------------------------------------------------------------------------- */
+window.addEventListener('resize', resize);
+refreshVisible();
+resize();
+fit();
+
+/* A view is worth sharing, so it gets a URL: graph.html#ARAW01,blast
+   opens on that member with that mode already applied. */
+function writeHash(){
+  if (typeof history === 'undefined' || !history.replaceState) return;
+  const h = S.sel < 0 ? '' : G.name[S.sel] + (S.mode === 'explore' ? '' : ',' + S.mode);
+  // file:// is fussy about replaceState in some browsers; the map works
+  // without a URL, so a failure here is not worth an error.
+  try { history.replaceState(null, '', h ? '#' + h : ' '); } catch (e) {}
+}
+function readHash(){
+  if (typeof location === 'undefined' || !location.hash) return;
+  const [name, mode] = decodeURIComponent(location.hash.slice(1)).split(',');
+  if (mode && ['explore','focus','blast'].includes(mode)){
+    S.mode = mode;
+    document.querySelectorAll('.mode').forEach(b =>
+      b.classList.toggle('on', b.dataset.mode === mode));
+    renderModeOpts();
+  }
+  const i = G.name.indexOf((name || '').trim().toUpperCase());
+  if (i >= 0){
+    select(i);
+    if (S.mode === 'explore'){ S.cam.s = Math.max(S.cam.s, 5); centre(i); }
+  }
+}
+const _select = select;
+select = function(i){ _select(i); writeHash(); };
+readHash();
+</script>
+</body>
+</html>

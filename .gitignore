@@ -1,0 +1,56 @@
+# Build output. The wheel is a release artefact, attached to a GitHub Release
+# by the workflow - it is never committed.
+_build/
+dist/
+build/
+*.egg-info/
+*.whl
+
+# Compiled extensions. These are produced by the build; committing one would
+# put a stale binary next to the source it was built from.
+*.pyd
+*.so
+*.pyi
+
+# Nuitka intermediates
+*.build/
+*.dist/
+*.onefile-build/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Runtime state written by the knowledge base: the index (~320 MB), the
+# generated map, the JSON export, the seeded lexicon, and mcp-token, which is
+# a CREDENTIAL and must never be committed.
+kb/data/facts.db
+kb/data/facts.db-*
+kb/data/facts.db.new*
+kb/data/settings.json
+kb/data/runtime.json
+kb/data/seeded.json
+kb/data/code-graph.json
+kb/data/graph.html
+kb/data/summaries/
+kb/data/neo4j/
+kb/data/ticket-memory.db
+kb/data/ticket-memory.db-*
+_alphaplus-kb/
+alphaplus-kb/
+
+# The real environment - it can carry a DSN and a database password.
+.env
+.env.*
+
+# OS and editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

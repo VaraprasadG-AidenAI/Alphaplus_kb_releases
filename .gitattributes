@@ -1,0 +1,13 @@
+# Keep LF on the files a Linux runner executes as shell.
+#
+# core.autocrlf=true (the usual Windows setting) already stores LF in the
+# repository, so this is belt and braces - but the failure it prevents is a
+# nasty one. The publish job's `run:` blocks are bash, and a CRLF heredoc
+# terminator (`EOF\r`) does not match `EOF`, so the script runs to end-of-file
+# and dies with a syntax error that says nothing about line endings.
+#
+# Deliberately narrow: no `* text=auto`, so nothing else in the tree is
+# renormalised.
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.sh    text eol=lf

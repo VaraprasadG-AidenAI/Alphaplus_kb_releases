@@ -1,0 +1,22 @@
+[
+ {
+  "ticket": "APD-1007",
+  "band": "precise",
+  "arm": "baseline",
+  "gold": [
+   "CUSMAS",
+   "CUS200"
+  ],
+  "mentioned": [],
+  "hits": [],
+  "recall": 0.0,
+  "fix_site": "",
+  "fix_site_hit": false,
+  "declined": false,
+  "false_confidence": false,
+  "seconds": 240.22652983665466,
+  "ok": false,
+  "error": "timed out after 240s",
+  "output": ""
+ }
+]

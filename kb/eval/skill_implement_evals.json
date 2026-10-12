@@ -1,0 +1,27 @@
+{
+  "skill_name": "alphaplus-implement",
+  "note": "Test prompts for the implementation skill, run against the replica in APPSRC. Kept outside the skill folder so nothing replica-specific ships with the skill. Run each on a copy of APPSRC, never on the committed tree.",
+  "evals": [
+    {
+      "id": 1,
+      "name": "dds-widen-with-report",
+      "prompt": "implement SAR-TEST-1 pls - carrier company code CARCMP on the carrier master CARMAS has to go from 3 to 5 characters. do the code changes and give me the implementation report",
+      "expected_output": "Runs or reads the impact analysis first; locates SERV/QDDSSRC/CARMAS.PF through find_object and one Glob match; presents a plan and waits for approval; snapshots before editing; changes the length right-justified in columns 30-34; handles every site that carries the old width (logical files, screens, copybooks, working storage) as edit or no edit with a reason; guard check has no FAIL; writes Implementation/SAR-TEST-1.md in the template order and Implementation/SAR-TEST-1.patch; lists CHGPF and recompiles as pending.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "screen-function-key",
+      "prompt": "on the despatch enquiry screen DES100D the refresh is on F5 but users want it on F7. can you make that change in the source for ticket SAR-TEST-2",
+      "expected_output": "Uses explain_screen on DES100D; changes the CF05 keyword and its indicator in the DSPF and the matching indicator test in every program that uses the screen; checks F7 is not already assigned; keeps DDS keyword columns; report shows each edited line with a ruler and states the device file and programs recompile.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "cobol-working-storage-no-marks",
+      "prompt": "SAR-TEST-3: AUD100 should carry the program version as 10 characters instead of 8. just apply it to the code, the impact is small",
+      "expected_output": "Still establishes the change and locates ALPH/QCBLLESRC/AUD100.SQLCBLLE before editing; runs source_guard marks and follows the member's convention (no change marks on code lines in the replica, so adds none unless asked, and adds a change-history line in the member's own format only with the user's values); changes PIC X(08) to X(10) and every move or literal that assumes 8; checks the VALUE literal still fits; guard check clean; report written.",
+      "files": []
+    }
+  ]
+}
